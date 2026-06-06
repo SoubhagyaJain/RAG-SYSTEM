@@ -31,33 +31,29 @@ ollama:
   timeout: 300
 
   # === Gemma 4 Latest ===
-  llm_model: "gemma4:latest"                # ← Update if your Ollama tag is different (user confirmed gemma4:latest)
+  llm_model: "gemma4:latest"
   llm_temperature: 0.1
   llm_max_tokens: 2048
-  llm_num_ctx: 8192                         # Start with 8k, can increase later (up to 128k)
+  llm_num_ctx: 8192
 
   # Embeddings
   embed_model: "nomic-embed-text"
   embed_batch_size: 64
 
-  # Reranker (will be used in later phase)
-  reranker_model: "bge-reranker-base"
-
 # -----------------------------------------------------------------------------
 # LlamaIndex Settings
 # -----------------------------------------------------------------------------
 llama_index:
-  chunk_size: 400                           # Characters (see length_function=len in pipeline). Conservative for local embed models to avoid context length errors on Ollama.
-  chunk_overlap: 60
-  similarity_top_k: 10
-  response_mode: "compact"                  # compact | tree_summarize | refine
+  chunk_size: 700                           # ← Increased from 400 (better semantic chunks)
+  chunk_overlap: 100                        # ← Increased from 60
+  similarity_top_k: 12                      # ← Increased from 10
+  response_mode: "compact"
 
   vector_store:
     backend: "chroma"
     collection_name: "ai_agents_guidebook"
     persist_dir: "data/processed/chroma_db"
 
-  # Rich metadata (very useful for this guidebook)
   include_metadata: true
   metadata_keys_to_include:
     - "page_label"
@@ -66,43 +62,48 @@ llama_index:
     - "section"
     - "has_code"
     - "has_diagram"
+    - "content_type"
+    - "parent_id"
 
 # -----------------------------------------------------------------------------
 # Ingestion
 # -----------------------------------------------------------------------------
 ingestion:
-  loader: "llama_index"                     # Current pipeline uses LlamaIndex SimpleDirectoryReader
+  loader: "llama_index"
   use_llama_parse: false
   extract_images: false
   extract_tables: true
-  force_reingest: false                     # Set true to overwrite existing Chroma collection
-  min_chunks_threshold: 50                  # Used for idempotency check
-
+  force_reingest: false
+  min_chunks_threshold: 50
 
 # -----------------------------------------------------------------------------
-# Retrieval Strategies
+# Retrieval Strategies (Updated)
 # -----------------------------------------------------------------------------
 retrieval:
-  # Supported modes (see src/retrieval/retriever.py for implementations):
-  # - "vector"       : Pure dense vector similarity (baseline)
-  # - "small_to_big" : Retrieve small leaves, expand to real parent nodes from docstore (recommended)
-  # - "hybrid"       : Vector + BM25 via QueryFusionRetriever (great for technical docs)
-  mode: "small_to_big"
+  # Default after diagnostics (plan recommends making both modes reliable, then let data decide).
+  # Hybrid often wins for term-heavy technical PDFs once nodes are solid.
+  mode: "hybrid"
 
-  top_k: 8                                  # Final number of contexts passed to the LLM
-  fetch_k: 25                               # Over-fetch for MMR / fusion (if used)
+  top_k: 12
+  fetch_k: 30
 
   # Hybrid Search (Vector + BM25)
-  hybrid_fusion_mode: "reciprocal_rerank"   # "simple" | "reciprocal_rerank"
-  bm25_top_k: 10
+  hybrid_fusion_mode: "reciprocal_rerank"
+  bm25_top_k: 15
 
-  # Small-to-Big specific
-  small_to_big_top_k: 15                    # Number of small leaves to retrieve before parent expansion
-  small_to_big_max_parents: 6               # How many big parent contexts to keep
+  # Small-to-Big
+  small_to_big_top_k: 20
+  small_to_big_max_parents: 8
 
-  # Future / advanced
   use_reranker: false
   mmr_lambda: 0.5
+
+  # Metadata-based score boosting to correct section bias (e.g. over-retrieval of "6. Memory")
+  # This is applied via a NodePostprocessor after retrieval (in get_query_engine).
+  metadata_boosting:
+    enabled: true
+    memory_section_penalty: 0.6      # Reduce score of nodes whose section contains "Memory"
+    boost_important_sections: true   # Give modest boost to nodes from key sections (ReAct, Tool Use, etc.)
 
 # -----------------------------------------------------------------------------
 # Generation
@@ -110,7 +111,7 @@ retrieval:
 generation:
   system_prompt_version: "v1"
   include_citations: true
-  citation_format: "page"                   # page | section | both
+  citation_format: "page"
 
 # -----------------------------------------------------------------------------
 # Evaluation Framework
@@ -120,22 +121,20 @@ evaluation:
   dataset_path: "data/evaluation/eval_dataset.json"
   output_dir: "artifacts/evaluation_results"
   save_results: true
-  num_questions: 20                         # Subset for quick iteration (full dataset has 40-50)
+  num_questions: 18  # full current dataset; use 5 for smoke during heavy iteration
   
-  # Retrieval evaluation
   retrieval_k: 10
   retrieval_metrics:
     - "recall_at_k"
     - "context_precision"
     - "page_hit_rate"
   
-  # Generation evaluation (Ragas + custom)
   ragas_metrics:
     - "faithfulness"
     - "answer_relevancy"
   custom_metrics:
-    - "educational_quality"                 # Custom LLM-as-judge for structure, depth, citations, clarity
-  llm_for_judge: "gemma4:latest"            # Use latest model for judge
+    - "educational_quality"
+  llm_for_judge: "gemma4:latest"
   embed_model_for_ragas: "nomic-embed-text"
   temperature: 0.0
   max_tokens: 1024

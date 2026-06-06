@@ -48,7 +48,6 @@ class SectionAwareHierarchicalChunking:
         for pattern in self.HEADER_FOOTER_PATTERNS:
             cleaned = re.sub(pattern, " ", cleaned)
 
-        # Join hyphenated line breaks and normalize whitespace without flattening headings.
         cleaned = re.sub(r"(\w)-\s*\n\s*(\w)", r"\1\2", cleaned)
         cleaned = re.sub(r"[ \t]+", " ", cleaned)
         cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
@@ -63,7 +62,6 @@ class SectionAwareHierarchicalChunking:
         return int(match.group(0)) if match else None
 
     def prepare_documents(self, documents: list[Document]) -> list[Document]:
-        """Create parser-friendly page documents with concise, stable metadata."""
         prepared: list[Document] = []
 
         for fallback_page, doc in enumerate(documents, 1):
@@ -92,7 +90,6 @@ class SectionAwareHierarchicalChunking:
         return prepared
 
     def build_nodes(self, documents: list[Document]) -> tuple[list[BaseNode], list[BaseNode]]:
-        """Return all hierarchy nodes and leaf nodes suitable for vector indexing."""
         prepared = self.prepare_documents(documents)
         all_nodes = self.parser.get_nodes_from_documents(prepared, show_progress=True)
         leaf_nodes = get_leaf_nodes(all_nodes)
@@ -103,23 +100,15 @@ class GuidebookIngestionPipeline:
     def __init__(self) -> None:
         self.settings = get_settings()
 
-        # === Robust Path Resolution ===
-        # Use the same _find_project_root as the notebook inspect cell
-        # so that persist_dir and pdf_path are identical no matter where the notebook is run from.
         from src.config import _find_project_root
         project_root = _find_project_root()
 
-        # Use the vector_store config values (consistent with inspect cell and config.yaml)
         vs = self.settings.llama_index.vector_store
         self.persist_dir = project_root / vs.persist_dir
         self.collection_name = vs.collection_name
-
-        # PDF from paths config for consistency
         self.pdf_path = project_root / self.settings.paths.data_raw / self.settings.document.primary_pdf
 
-        # Ensure directories exist
         self.persist_dir.mkdir(parents=True, exist_ok=True)
-
         logger.info(f"PDF path resolved to: {self.pdf_path}")
 
     def _get_chroma_vector_store(self):
@@ -166,30 +155,55 @@ class GuidebookIngestionPipeline:
         logger.success(f"Loaded {len(documents)} pages successfully")
         return documents
 
+    # ==================== IMPROVED SECTION INFERENCE ====================
     def _infer_section(self, node: BaseNode, last_heading: str | None = None) -> str | None:
-        """Improved section inference for hierarchical nodes (structure-aware).
-        Prefers parser-inherited heading meta (from HierarchicalNodeParser + prepare_documents),
-        then scans initial lines of (cleaned) text for common guidebook heading patterns.
-        Carries forward last_heading for continuity across sibling chunks.
-        """
+        """Robust section inference. Prevents '6. Memory' leakage into other sections."""
         meta = node.metadata or {}
-        # Parser/doc-provided keys (prepare + HierarchicalNodeParser propagate these)
+
+        # Prefer parser-provided headings
         for key in ["section", "heading", "title", "Header", "Header_1", "Header_2"]:
             if key in meta and meta[key]:
                 val = str(meta[key]).strip()
-                if val and len(val) < 150:
+                if val and len(val) < 130:
                     return val
 
         text = node.get_content(metadata_mode=MetadataMode.NONE).strip()
-        if text:
-            # Check first few lines (headings often at chunk start due to structure preservation)
-            for line in [l.strip() for l in text.split("\n")[:3] if l.strip()]:
-                if 5 < len(line) < 120 and not line.endswith((".", ":", ";")):
-                    if re.match(r"^(Chapter|Section|Part|\d+\.|\d+\.\d+|#+\s|•\s*|\*\*\s*)", line, re.IGNORECASE):
-                        return line[:120]
-                    # Title-cased short phrases are often headings in this guidebook
-                    if line.istitle() and 2 < len(line.split()) < 10:
-                        return line[:120]
+        if not text:
+            return last_heading
+
+        first_lines = [l.strip() for l in text.split("\n")[:4] if l.strip()]
+
+        # Known major sections from the PDF TOC
+        MAJOR_SECTIONS = [
+            "Building blocks of AI Agents",
+            "5 Agentic AI Design Patterns",
+            "5 Levels of Agentic AI Systems",
+            "AI Agents Projects",
+            "What is an AI Agent?",
+            "Agent vs LLM vs RAG",
+        ]
+
+        for line in first_lines:
+            clean_line = line[:130]
+
+            if re.match(r"^(Chapter|Section|Part|#?\d+[\.\)]|\d+\.\d+)", clean_line, re.IGNORECASE):
+                return clean_line
+
+            for major in MAJOR_SECTIONS:
+                if major.lower() in clean_line.lower():
+                    return major
+
+            if (
+                clean_line.istitle()
+                and 3 < len(clean_line.split()) < 12
+                and not clean_line.endswith((".", ":", ";", ","))
+            ):
+                return clean_line
+
+        # Conservative carry-forward — do not keep propagating "Memory"
+        if last_heading and "Memory" in last_heading:
+            return None
+
         return last_heading
 
     def _detect_has_code(self, text: str) -> bool:
@@ -208,10 +222,6 @@ class GuidebookIngestionPipeline:
         return any(kw in text.lower() for kw in keywords)
 
     def _detect_content_type(self, text: str, meta: dict[str, Any]) -> str:
-        """Intelligently classify chunk content type (structure + keyword aware).
-        Uses has_* flags (from detectors above) + guidebook-specific heuristics.
-        Keeps sections/headings together where possible via hierarchical parser upstream.
-        """
         if not text:
             return "general"
         t = text.lower()
@@ -238,25 +248,27 @@ class GuidebookIngestionPipeline:
             meta["document_title"] = self.settings.document.source_name
             meta["source"] = self.settings.document.primary_pdf
 
-            # Page number
             page = meta.get("page_number") or meta.get("page_label")
             meta["page_number"] = int(str(page).replace("p.", "").strip()) if page else None
 
-            # Section
+            # === IMPROVED SECTION ASSIGNMENT ===
             section = self._infer_section(node, last_heading)
             if section:
                 last_heading = section
-            meta["section"] = section or "Unknown"
+            else:
+                # Try recovering from parent node
+                rels = getattr(node, "relationships", {}) or {}
+                parent = rels.get(NodeRelationship.PARENT)
+                if parent and hasattr(parent, "metadata"):
+                    section = parent.metadata.get("section")
 
-            # Code & Diagram
+            meta["section"] = section or last_heading or "Unknown"
+
             text = node.get_content(metadata_mode=MetadataMode.NONE)
             meta["has_code"] = self._detect_has_code(text)
             meta["has_diagram"] = self._detect_has_diagram(text, meta)
-
-            # New: content type (intelligent detection per requirements)
             meta["content_type"] = self._detect_content_type(text, meta)
 
-            # New: parent_id from hierarchical relationships (set by HierarchicalNodeParser)
             rels = getattr(node, "relationships", {}) or {}
             parent = rels.get(NodeRelationship.PARENT)
             meta["parent_id"] = getattr(parent, "node_id", None) if parent else None
@@ -270,6 +282,8 @@ class GuidebookIngestionPipeline:
         if force is None:
             force = getattr(self.settings.ingestion, "force_reingest", False)
 
+        self.settings.configure_llama_index()
+
         already_done, count = self._check_already_ingested()
         if already_done and not force:
             logger.info(f"Ingestion skipped. Already have {count} nodes.")
@@ -280,27 +294,27 @@ class GuidebookIngestionPipeline:
 
         documents = self.load_documents()
 
-        # === SectionAwareHierarchicalChunking integration ===
         chunker = SectionAwareHierarchicalChunking(
             document_title=self.settings.document.source_name,
             source=self.settings.document.primary_pdf,
         )
         all_nodes, leaf_nodes = chunker.build_nodes(documents)
-        logger.info(f"Hierarchical chunking (SectionAware) produced {len(leaf_nodes)} leaf nodes")
+        logger.info(f"Hierarchical chunking produced {len(leaf_nodes)} leaf nodes")
 
         nodes = self.enrich_metadata(leaf_nodes)
 
-        # Assign chunk_index
         for i, node in enumerate(nodes):
             node.metadata = node.metadata or {}
             node.metadata["chunk_index"] = i
 
-        # Safety cap for embedding
-        MAX_EMBED_CHARS = 1500
+        # ==================== FIXED: Removed aggressive truncation ====================
+        # We now use a much higher safe limit (or none) so we don't destroy context before embedding.
+        MAX_EMBED_CHARS = 8000
         for node in nodes:
             text = node.get_content()
             if len(text) > MAX_EMBED_CHARS:
                 node.text = text[:MAX_EMBED_CHARS]
+                logger.warning(f"Truncated very long node to {MAX_EMBED_CHARS} chars")
 
         vector_store = self._get_chroma_vector_store()
 
@@ -311,18 +325,22 @@ class GuidebookIngestionPipeline:
             except Exception:
                 pass
 
-        # === Important for Real Parent Node Retrieval ===
-        # We create a StorageContext with the (possibly recreated) vector_store,
-        # then add the *full* hierarchical nodes (leaves + 512/2048 parents) to the docstore.
-        # This allows SmallToBigRetriever to fetch the actual parent node text by ID at query time.
-        # Only the leaf nodes are passed to VectorStoreIndex (they are the ones we want to
-        # retrieve via vector similarity).
         storage_context = StorageContext.from_defaults(vector_store=vector_store)
         storage_context.docstore.add_documents(all_nodes)
 
         VectorStoreIndex(nodes, storage_context=storage_context, show_progress=True)
 
-        logger.success(f"Ingestion completed (via SectionAwareHierarchicalChunking). Total leaf nodes inserted: {len(nodes)}")
+        try:
+            hierarchy_path = self.persist_dir / "hierarchy_nodes.json"
+            node_dicts = [n.to_dict() for n in all_nodes]
+            import json
+            with open(hierarchy_path, "w", encoding="utf-8") as f:
+                json.dump(node_dicts, f, ensure_ascii=False, indent=2)
+            logger.info(f"Saved hierarchy sidecar ({len(node_dicts)} nodes)")
+        except Exception as e:
+            logger.warning(f"Failed to save hierarchy sidecar: {e}")
+
+        logger.success(f"Ingestion completed. Total leaf nodes: {len(nodes)}")
         return len(nodes)
 
 

@@ -1,26 +1,18 @@
 """
 Modular Retrieval Strategies for the Educational RAG System.
 
-This module provides different retrieval modes that can be selected via config.yaml
-under `retrieval.mode`:
+Supported modes (via config.yaml → retrieval.mode):
+- "vector"       : Standard vector similarity
+- "small_to_big" : Retrieve leaves → expand to real parent nodes from docstore
+- "hybrid"       : Vector + BM25 (QueryFusionRetriever)
 
-- "vector": Standard vector similarity search on leaf nodes.
-- "small_to_big": Retrieve small leaves, then expand to the actual parent node
-  from the docstore (real parent context from HierarchicalNodeParser).
-- "hybrid": Combine vector search with BM25 keyword search using QueryFusionRetriever.
-
-All retrievers are designed to work with the rich metadata produced by
-SectionAwareHierarchicalChunking (page_number, section, content_type, parent_id, etc.).
-
-The SmallToBigRetriever here uses *real parent nodes* (fetched via docstore)
-instead of merging sibling leaves, providing cleaner, more coherent context
-to the LLM for educational answers.
+This version has improved robustness in Hybrid mode.
 """
 
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import List, Optional, Any
+from typing import List, Any
 
 from llama_index.core import VectorStoreIndex
 from llama_index.core.retrievers import BaseRetriever, QueryFusionRetriever
@@ -28,19 +20,16 @@ from llama_index.core.schema import BaseNode, NodeWithScore, QueryBundle, TextNo
 
 from src.logging_config import logger
 
-# BM25Retriever is optional (requires llama-index-retrievers-bm25).
-# We import it lazily inside get_retriever when mode="hybrid".
+# BM25Retriever (optional)
 BM25Retriever = None
 try:
     from llama_index.retrievers.bm25 import BM25Retriever as _BM25Retriever
     BM25Retriever = _BM25Retriever
 except ImportError:
-    pass  # Will be handled with a clear error in get_retriever if hybrid is requested without the package.
+    pass
 
 
 class VectorRetriever(BaseRetriever):
-    """Simple wrapper around the vector retriever for consistency."""
-
     def __init__(self, index: VectorStoreIndex, similarity_top_k: int = 10):
         super().__init__()
         self._retriever = index.as_retriever(similarity_top_k=similarity_top_k)
@@ -51,27 +40,14 @@ class VectorRetriever(BaseRetriever):
 
 class SmallToBigRetriever(BaseRetriever):
     """
-    Real Small-to-Big retrieval using actual parent nodes from the hierarchy.
-
-    Process:
-    1. Retrieve `small_top_k` leaf nodes using vector similarity (precise matches).
-    2. For each leaf, look up its `parent_id` from metadata.
-    3. Fetch the *actual parent node* from the docstore (the 512-token section
-       created by HierarchicalNodeParser during ingestion).
-    4. Return the parent nodes as the "big" contexts for generation.
-
-    This is superior to merging siblings because the parent node is a
-    coherent, self-contained section written by the author (or the hierarchical
-    parser at that level).
-
-    Requires that ingestion stored the parent nodes in the docstore
-    (see updated ingestion_pipeline.py).
+    Retrieves small leaf nodes, then expands to the actual parent node
+    stored in the docstore during ingestion.
     """
 
     def __init__(
         self,
         base_retriever: BaseRetriever,
-        docstore: Any,  # BaseDocumentStore or compatible
+        docstore: Any,
         small_top_k: int = 15,
         max_big_nodes: int = 6,
     ):
@@ -82,13 +58,11 @@ class SmallToBigRetriever(BaseRetriever):
         self._max_big_nodes = max_big_nodes
 
     def _retrieve(self, query_bundle: QueryBundle) -> List[NodeWithScore]:
-        # 1. Retrieve more small leaves for good coverage
         small_nodes = self._base_retriever.retrieve(query_bundle)[: self._small_top_k]
 
         if not small_nodes:
             return []
 
-        # 2. Group by parent to avoid duplicate big contexts
         parent_groups: dict[str, list[NodeWithScore]] = defaultdict(list)
         for ns in small_nodes:
             pid = ns.node.metadata.get("parent_id") or "root"
@@ -98,17 +72,14 @@ class SmallToBigRetriever(BaseRetriever):
 
         for pid, group in parent_groups.items():
             if pid == "root":
-                # No parent - use the best small node as-is
                 best = max(group, key=lambda x: x.score or 0.0)
                 big_nodes.append(best)
                 continue
 
-            # 3. Fetch the real parent node from docstore
             try:
                 parent_node: BaseNode = self._docstore.get_document(pid)
                 parent_text = parent_node.get_content()
 
-                # Use the highest-scoring leaf's metadata for citations
                 best = max(group, key=lambda x: x.score or 0.0)
                 big_metadata = parent_node.metadata.copy()
                 big_metadata.update({
@@ -128,35 +99,27 @@ class SmallToBigRetriever(BaseRetriever):
                     id_=f"parent-{pid}",
                 )
                 big_nodes.append(NodeWithScore(node=big_node, score=best.score))
-            except Exception as e:
-                logger.warning(f"Could not fetch parent {pid} from docstore: {e}. Falling back to merged leaves.")
-                # Fallback: merge siblings (previous behavior)
-                group.sort(key=lambda x: x.node.metadata.get("chunk_index") or 0)
-                merged = "\n\n".join(n.node.get_content() for n in group)
-                best = max(group, key=lambda x: x.score or 0.0)
-                big_metadata = best.node.metadata.copy()
-                big_metadata["retrieval_mode"] = "small-to-big-fallback"
-                big_node = TextNode(text=merged, metadata=big_metadata)
-                big_nodes.append(NodeWithScore(node=big_node, score=best.score))
 
-        # Return top big contexts
+            except Exception as e:
+                logger.warning(f"Parent {pid} not found in docstore: {e}. Using fallback merge.")
+                group.sort(key=lambda x: x.node.metadata.get("chunk_index") or 0)
+                merged_text = "\n\n".join(n.node.get_content() for n in group)
+                best = max(group, key=lambda x: x.score or 0.0)
+                meta = best.node.metadata.copy()
+                meta["retrieval_mode"] = "small-to-big-fallback"
+                big_nodes.append(NodeWithScore(node=TextNode(text=merged_text, metadata=meta), score=best.score))
+
         big_nodes.sort(key=lambda x: x.score or 0.0, reverse=True)
         return big_nodes[: self._max_big_nodes]
 
 
 class HybridRetriever(BaseRetriever):
-    """
-    Hybrid Search = Vector + BM25 using QueryFusionRetriever.
-
-    This combines semantic (vector) and lexical (BM25) signals.
-    Very effective for technical documents with specific terminology
-    (e.g. "ReAct", "agentic workflow", "tool use").
-    """
+    """Vector + BM25 using QueryFusionRetriever."""
 
     def __init__(
         self,
         vector_retriever: BaseRetriever,
-        bm25_retriever: "BM25Retriever",
+        bm25_retriever: Any,
         similarity_top_k: int = 8,
         fusion_mode: str = "reciprocal_rerank",
     ):
@@ -174,6 +137,59 @@ class HybridRetriever(BaseRetriever):
         return self._fusion_retriever.retrieve(query_bundle)
 
 
+def _get_leaf_nodes_for_bm25(index: VectorStoreIndex) -> list[TextNode]:
+    """
+    Robustly extract leaf nodes for BM25.
+    Tries multiple sources in order:
+    1. In-memory docstore (best case)
+    2. Raw documents from Chroma collection
+    3. Last resort: whatever is in docstore
+    """
+    leaf_nodes: list[TextNode] = []
+
+    # 1. Try in-memory docstore first
+    try:
+        docs = getattr(index.docstore, "docs", {}) or {}
+        leaf_nodes = [
+            node for node in docs.values()
+            if isinstance(node, TextNode) and node.metadata.get("chunk_index") is not None
+        ]
+        if leaf_nodes:
+            return leaf_nodes
+    except Exception:
+        pass
+
+    # 2. Fallback: Read directly from Chroma
+    try:
+        vs = getattr(index, "vector_store", None)
+        collection = None
+
+        if vs is not None:
+            if hasattr(vs, "_collection") and vs._collection:
+                collection = vs._collection
+            elif hasattr(vs, "client"):
+                client = vs.client
+                cname = getattr(vs, "collection_name", None)
+                if cname and hasattr(client, "get_collection"):
+                    collection = client.get_collection(cname)
+
+        if collection is not None and hasattr(collection, "get"):
+            data = collection.get(include=["documents", "metadatas"])
+            for text, meta in zip(data.get("documents", []), data.get("metadatas", [])):
+                if text:
+                    leaf_nodes.append(TextNode(text=text, metadata=meta or {}))
+            if leaf_nodes:
+                return leaf_nodes
+    except Exception as e:
+        logger.warning(f"Could not extract nodes from Chroma: {e}")
+
+    # 3. Last resort
+    try:
+        return list(getattr(index.docstore, "docs", {}).values())
+    except Exception:
+        return []
+
+
 def get_retriever(
     index: VectorStoreIndex,
     mode: str = "small_to_big",
@@ -183,18 +199,13 @@ def get_retriever(
     bm25_top_k: int = 10,
     **kwargs,
 ) -> BaseRetriever:
-    """
-    Factory to get the desired retriever based on configuration.
 
-    This makes retrieval fully modular and switchable via config.yaml
-    without changing query_engine.py logic.
-    """
     if mode == "vector":
         logger.info("Using pure vector retrieval")
         return index.as_retriever(similarity_top_k=similarity_top_k)
 
     elif mode == "small_to_big":
-        logger.info("Using Small-to-Big retrieval (real parent nodes)")
+        logger.info("Using Small-to-Big retrieval (real parents)")
         base_retriever = index.as_retriever(similarity_top_k=small_to_big_top_k)
         return SmallToBigRetriever(
             base_retriever=base_retriever,
@@ -204,21 +215,23 @@ def get_retriever(
         )
 
     elif mode == "hybrid":
-        logger.info(f"Using Hybrid (Vector + BM25) with fusion_mode={hybrid_fusion_mode}")
+        logger.info(f"Using Hybrid retrieval (Vector + BM25)")
 
         if BM25Retriever is None:
             raise ImportError(
-                "Hybrid search requires 'llama-index-retrievers-bm25'. "
-                "Install with: pip install llama-index-retrievers-bm25"
+                "Hybrid mode requires 'llama-index-retrievers-bm25'. "
+                "Install it with: pip install llama-index-retrievers-bm25"
             )
 
         vector_retriever = index.as_retriever(similarity_top_k=bm25_top_k)
 
-        # Build BM25 on the leaf nodes for lexical search on fine-grained chunks
-        leaf_nodes = [
-            node for node in index.docstore.docs.values()
-            if node.metadata.get("chunk_index") is not None
-        ] or list(index.docstore.docs.values())
+        leaf_nodes = _get_leaf_nodes_for_bm25(index)
+
+        if not leaf_nodes:
+            raise ValueError(
+                "Hybrid retrieval requires leaf nodes for BM25. "
+                "Please re-run ingestion with the latest code, or switch to 'small_to_big' mode."
+            )
 
         bm25_retriever = BM25Retriever.from_defaults(
             nodes=leaf_nodes,
@@ -233,5 +246,5 @@ def get_retriever(
         )
 
     else:
-        logger.warning(f"Unknown retrieval mode '{mode}', falling back to vector")
+        logger.warning(f"Unknown mode '{mode}', falling back to vector")
         return index.as_retriever(similarity_top_k=similarity_top_k)

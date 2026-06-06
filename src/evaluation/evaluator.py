@@ -44,19 +44,33 @@ from src.utils.io import ensure_dir
 def _get_ragas_modules():
     """Lazily import ragas and its wrappers.
 
-    Ragas pulls in a huge number of optional langchain_* providers
-    (including vertexai) at import time. We use direct submodule imports
-    (bypassing ragas.llms.__init__ etc.) to avoid pulling in providers we don't use.
+    Ragas has very eager imports in its __init__ and llms/ package that pull in
+    many optional LLM backends (VertexAI, Haystack, etc.) even when you only
+    want the LlamaIndex wrappers + a couple of metrics.
+
+    We use importlib + direct submodule access + a broad except to give a clear
+    actionable message. The root cause is almost always a missing
+    langchain-google-vertexai (or an older langchain-community that no longer
+    re-exports the vertexai chat model under the old path).
     """
     try:
         import importlib
 
+        # We deliberately import the smallest pieces we actually use.
+        # Even this can still trigger ragas/__init__.py in some ragas versions,
+        # which is why we have the very explicit error message below.
         ragas_evaluate = importlib.import_module("ragas.evaluation").evaluate
+
         embeddings_mod = importlib.import_module("ragas.embeddings")
         LlamaIndexEmbeddingsWrapper = embeddings_mod.LlamaIndexEmbeddingsWrapper
+
+        # This one is the usual culprit (ragas.llms.base does a hard import
+        # of langchain_community.chat_models.vertexai).
         llms_base = importlib.import_module("ragas.llms.base")
         LlamaIndexLLMWrapper = llms_base.LlamaIndexLLMWrapper
+
         metrics_mod = importlib.import_module("ragas.metrics")
+
         return {
             "evaluate": ragas_evaluate,
             "LlamaIndexEmbeddingsWrapper": LlamaIndexEmbeddingsWrapper,
@@ -66,14 +80,18 @@ def _get_ragas_modules():
             "context_recall": metrics_mod.context_recall,
             "faithfulness": metrics_mod.faithfulness,
         }
-    except ImportError as e:
+    except Exception as e:  # broad: ImportError, ModuleNotFoundError, etc.
         raise ImportError(
-            "Ragas and its LLM provider backends (langchain-community, langchain-google-vertexai, etc.) "
-            "are required for evaluation.\n\n"
-            "Install with:\n"
-            "    .\\.venv\\Scripts\\python.exe -m pip install -e \".[dev]\"\n\n"
-            "This will pull in ragas + the necessary LangChain provider packages.\n"
-            "After install, restart the Jupyter kernel.\n\n"
+            "Ragas generation evaluation requires extra LLM provider packages "
+            "(especially langchain-google-vertexai).\n\n"
+            "Ragas eagerly imports VertexAI wrappers from langchain at import time, "
+            "even when we only want the LlamaIndex path.\n\n"
+            "Fix (run in your project root):\n"
+            "    .\\.venv\\Scripts\\python.exe -m pip install -e \".[dev]\" langchain-google-vertexai\n\n"
+            "Or explicitly:\n"
+            "    .\\.venv\\Scripts\\python.exe -m pip install langchain-google-vertexai>=1.0 langchain-community>=0.2\n\n"
+            "Then **restart the Jupyter kernel** completely.\n\n"
+            "If you are using uv instead of pip, do the equivalent uv pip command.\n\n"
             f"Original error: {e}"
         ) from e
 
@@ -120,10 +138,81 @@ class RAGASEvaluator:
     def _load_dataset(self) -> list[dict[str, Any]]:
         if not self.dataset_path.exists():
             raise FileNotFoundError(f"Eval dataset not found: {self.dataset_path}")
+
         with open(self.dataset_path, "r", encoding="utf-8") as f:
-            ds = json.load(f)
-        n = getattr(self.eval_config, "num_questions", len(ds))
-        return ds[:n]
+            text = f.read()
+
+        try:
+            ds = json.loads(text)
+        except json.JSONDecodeError as e:
+            app_logger.warning(f"Malformed JSON in {self.dataset_path}: {e}. Attempting auto-repair...")
+            ds = self._repair_and_load_dataset(text)
+
+        if not isinstance(ds, list):
+            raise ValueError(
+                f"Eval dataset at {self.dataset_path} must be a JSON array of question objects. "
+                f"Got {type(ds).__name__} instead."
+            )
+
+        # Basic validation + filter
+        clean = []
+        for item in ds:
+            if isinstance(item, dict) and item.get("question"):
+                clean.append(item)
+
+        if not clean:
+            raise ValueError(f"No valid questions found in {self.dataset_path}")
+
+        n = getattr(self.eval_config, "num_questions", len(clean))
+        return clean[:n]
+
+    def _repair_and_load_dataset(self, text: str) -> list[dict[str, Any]]:
+        """Attempt to recover from common JSON corruption (extra data / concatenated arrays).
+        This happens when the file was appended to instead of overwritten, or had manual edits.
+        On success it rewrites the file cleanly and returns the items.
+        """
+        decoder = json.JSONDecoder()
+        pos = 0
+        items: list[dict] = []
+
+        while pos < len(text):
+            # skip whitespace
+            while pos < len(text) and text[pos].isspace():
+                pos += 1
+            if pos >= len(text):
+                break
+            try:
+                obj, consumed = decoder.raw_decode(text, pos)
+                if isinstance(obj, list):
+                    items.extend([x for x in obj if isinstance(x, dict) and x.get("question")])
+                elif isinstance(obj, dict) and obj.get("question"):
+                    items.append(obj)
+                pos += consumed
+            except json.JSONDecodeError:
+                pos += 1
+
+        # Deduplicate by question text (defensive)
+        seen = set()
+        unique = []
+        for it in items:
+            q = it.get("question", "").strip()
+            if q and q not in seen:
+                seen.add(q)
+                unique.append(it)
+
+        if unique:
+            # Rewrite the file as clean JSON so the corruption never happens again
+            try:
+                with open(self.dataset_path, "w", encoding="utf-8") as f:
+                    json.dump(unique, f, indent=2, ensure_ascii=False)
+                app_logger.warning(
+                    f"Auto-repaired {self.dataset_path} (recovered {len(unique)} questions) "
+                    "and wrote a clean single JSON array. A .bak of the old file may exist."
+                )
+            except Exception as write_err:
+                app_logger.error(f"Could not rewrite repaired dataset: {write_err}")
+
+        return unique
 
     # ---------------- Retrieval Evaluation ----------------
     def evaluate_retrieval(self, k: int | None = None) -> dict[str, float]:
@@ -131,9 +220,15 @@ class RAGASEvaluator:
         k = k or getattr(self.eval_config, "retrieval_k", 10)
         dataset = self._load_dataset()
 
+        # Try to get the actual retriever used by the QueryEngine.
+        # This is critical so that evaluate_retrieval() measures the configured strategy
+        # (Small-to-Big real-parent, Hybrid, etc.) instead of falling back to plain vector.
         retriever = getattr(self.query_engine, "retriever", None)
         if retriever is None:
-            # Fallback
+            retriever = getattr(self.query_engine, "_retriever", None)
+
+        if retriever is None:
+            # Last-resort fallback: plain vector retriever (loses Small-to-Big / Hybrid behavior)
             from src.retrieval.query_engine import get_vector_store
             from llama_index.core import VectorStoreIndex
             vs = get_vector_store()
@@ -141,44 +236,87 @@ class RAGASEvaluator:
             retriever = idx.as_retriever(similarity_top_k=k)
 
         total_recall = total_precision = total_hits = evaluated = 0.0
+        details: list[dict] = []
 
-        for item in dataset:
+        app_logger.info(f"Starting retrieval evaluation over {len(dataset)} questions (k={k})")
+
+        for idx, item in enumerate(dataset, 1):
             q = item.get("question")
             exp_pages = set(item.get("expected_pages", []))
             exp_sections = set(item.get("expected_sections", []))
             must = [t.lower() for t in item.get("must_retrieve_terms", [])]
-            if not q: continue
+            if not q:
+                continue
+
+            app_logger.info(f"  [{idx}/{len(dataset)}] Retrieving for: {q[:60]}...")
 
             try:
                 retrieved = retriever.retrieve(q)[:k]
-            except Exception:
+            except Exception as e:
+                app_logger.warning(f"    Retrieval failed for question {idx}: {e}")
                 continue
 
             pages = set()
             relevant = 0
+            retrieved_meta = []
             for ns in retrieved:
                 m = ns.node.metadata or {}
                 p = m.get("page_number")
                 sec = m.get("section", "")
                 txt = ns.node.get_content().lower()
-                if p is not None: pages.add(int(p))
+                if p is not None:
+                    pages.add(int(p))
                 if (p in exp_pages) or (sec in exp_sections) or any(mt in txt for mt in must):
                     relevant += 1
+                retrieved_meta.append({
+                    "page": p,
+                    "section": sec,
+                    "content_type": m.get("content_type"),
+                    "preview": ns.node.get_content()[:120].replace("\n", " ")
+                })
 
             if exp_pages:
                 total_recall += len(pages & exp_pages) / len(exp_pages)
             total_precision += relevant / max(1, len(retrieved))
-            if pages & exp_pages:
+            hit = bool(pages & exp_pages)
+            if hit:
                 total_hits += 1
             evaluated += 1
 
+            detail = {
+                "idx": idx,
+                "question": q[:80],
+                "expected_pages": sorted(exp_pages),
+                "retrieved_pages": sorted(pages),
+                "hit": hit,
+                "precision_contrib": round(relevant / max(1, len(retrieved)), 3),
+                "retrieved": retrieved_meta[:2],  # top 2 for brevity
+            }
+            details.append(detail)
+            app_logger.info(f"    pages_retrieved={sorted(pages)} expected={sorted(exp_pages)} hit={hit} precision={detail['precision_contrib']}")
+
+        app_logger.info(f"Retrieval evaluation complete. Evaluated {evaluated} questions.")
+
         if evaluated == 0:
-            return {"recall_at_k": 0.0, "context_precision": 0.0, "page_hit_rate": 0.0}
-        return {
+            return {"recall_at_k": 0.0, "context_precision": 0.0, "page_hit_rate": 0.0, "details": []}
+
+        agg = {
             "recall_at_k": round(total_recall / evaluated, 4),
             "context_precision": round(total_precision / evaluated, 4),
             "page_hit_rate": round(total_hits / evaluated, 4),
+            "evaluated": int(evaluated),
+            "details": details,
         }
+
+        # Print a compact per-question summary for immediate diagnostics (plan Step 1)
+        print("\n=== Per-question retrieval diagnostics (smoke set) ===")
+        for d in details:
+            print(f"Q{d['idx']}: hit={d['hit']} pages={d['retrieved_pages']} vs expected={d['expected_pages']} prec={d['precision_contrib']}")
+            for r in d.get("retrieved", []):
+                print(f"   -> page {r['page']} | {r['section'][:40]}... | {r['preview'][:80]}")
+
+        print(f"\nAGGREGATE (k={k}): recall_at_k={agg['recall_at_k']} context_precision={agg['context_precision']} page_hit_rate={agg['page_hit_rate']}")
+        return agg
 
     def _get_ragas_llm(self):
         """Wrap the project's LlamaIndex LLM (Gemma 4 8B) for Ragas."""
@@ -222,8 +360,29 @@ class RAGASEvaluator:
             return 0.5
 
     def evaluate_generation(self) -> dict[str, float]:
+        """Run Ragas + custom educational quality metrics.
+
+        If the full ragas + langchain provider stack is not installed (very common
+        because ragas eagerly imports VertexAI etc.), we gracefully degrade:
+        we still return retrieval scores + a clear note so the user doesn't lose
+        their retrieval evaluation work.
+        """
         dataset = self._load_dataset()
-        ragas_mets = self._select_ragas_metrics()
+
+        try:
+            ragas_mets = self._select_ragas_metrics()
+        except ImportError as e:
+            app_logger.warning(
+                "Generation evaluation (Ragas) skipped because of missing provider packages.\n"
+                f"{e}\n"
+                "You still have the retrieval scores. Install the packages listed above and "
+                "restart the kernel to get faithfulness / answer_relevancy / educational_quality."
+            )
+            return {
+                "generation_skipped": "Missing langchain-google-vertexai / ragas LLM backends. "
+                                      "See previous warning for install command."
+            }
+
         qs, ans, ctxs, gts = [], [], [], []
 
         for item in dataset:
@@ -252,6 +411,7 @@ class RAGASEvaluator:
         if "educational_quality" in getattr(self.eval_config, "custom_metrics", []):
             edu = [self._evaluate_educational_quality(q, a, c) for q, a, c in zip(qs, ans, ctxs)]
             scores["educational_quality"] = round(sum(edu) / max(1, len(edu)), 4) if edu else 0.0
+
         return scores
 
     # --- Main Entry Point ---
@@ -261,22 +421,40 @@ class RAGASEvaluator:
 
         retrieval_scores = self.evaluate_retrieval()
         generation_scores = self.evaluate_generation()
-        combined = {**retrieval_scores, **generation_scores}
 
-        result = {
-            "timestamp": ts,
-            "num_questions": len(self._load_dataset()),
-            "retrieval": retrieval_scores,
-            "generation": generation_scores,
-            "combined": combined,
-            "model": str(self.settings.ollama.llm_model),
-            "duration_seconds": round(time.time() - start, 2),
-        }
+        # Graceful handling when generation was skipped due to missing ragas backends
+        if "generation_skipped" in generation_scores:
+            combined = {**retrieval_scores, **generation_scores}
+            result = {
+                "timestamp": ts,
+                "num_questions": len(self._load_dataset()),
+                "retrieval": retrieval_scores,
+                "generation": generation_scores,
+                "combined": combined,
+                "model": str(self.settings.ollama.llm_model),
+                "duration_seconds": round(time.time() - start, 2),
+                "note": "Generation metrics (Ragas + educational_quality) were skipped. "
+                        "See logs for the exact pip command. Retrieval results are still valid and saved.",
+            }
+        else:
+            combined = {**retrieval_scores, **generation_scores}
+            result = {
+                "timestamp": ts,
+                "num_questions": len(self._load_dataset()),
+                "retrieval": retrieval_scores,
+                "generation": generation_scores,
+                "combined": combined,
+                "model": str(self.settings.ollama.llm_model),
+                "duration_seconds": round(time.time() - start, 2),
+            }
 
         if save if save is not None else getattr(self.eval_config, "save_results", True):
             self._save_results(result)
 
-        app_logger.success(f"Full evaluation complete: {combined}")
+        if "generation_skipped" in generation_scores:
+            app_logger.warning("Evaluation finished with retrieval only (generation skipped due to missing packages).")
+        else:
+            app_logger.success(f"Full evaluation complete: {combined}")
         return result
 
     def _save_results(self, result: dict):
