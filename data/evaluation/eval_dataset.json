@@ -1,54 +1,75 @@
 [
   {
     "question": "What is the ReAct pattern and how does it combine reasoning with action in AI agents?",
-    "ground_truth": "ReAct (Reason + Act) is a paradigm where an agent alternates between generating reasoning traces (thoughts) and taking actions. This allows the agent to plan, execute, observe results, and adjust its reasoning dynamically, significantly improving performance on complex tasks compared to pure reasoning or pure acting.",
-    "reference_contexts": [
-      "ReAct interleaves reasoning traces and task-specific actions in an interleaved manner. This allows the agent to reason about the current state, decide on the next action, observe the outcome, and continue reasoning.",
-      "The ReAct pattern has been shown to outperform both chain-of-thought reasoning alone and acting without explicit reasoning on knowledge-intensive and decision-making tasks."
-    ]
+    "ground_truth": "ReAct (Reason + Act) is a paradigm where an agent alternates between generating reasoning traces (thoughts) and taking actions. This allows the agent to plan, execute, observe results, and adjust its reasoning dynamically.",
+    "expected_pages": [45, 46, 47],
+    "expected_sections": ["ReAct Pattern", "Reason + Act Loop"],
+    "must_retrieve_terms": ["ReAct", "reasoning traces", "act"]
   },
   {
     "question": "Explain the five levels of agentic systems as described in modern agent literature.",
-    "ground_truth": "The five levels typically range from Level 0 (simple rule-based or scripted agents) to Level 5 (fully autonomous agents capable of long-horizon planning, self-improvement, multi-agent collaboration, and operating reliably in open-ended environments with minimal human oversight). Intermediate levels involve increasing degrees of reasoning, tool use, memory, and adaptability.",
-    "reference_contexts": [
-      "Agentic systems can be categorized into progressive levels of capability and autonomy, starting from basic reactive agents and advancing to sophisticated systems that exhibit goal-directed behavior over long time horizons."
-    ]
+    "ground_truth": "The five levels range from Level 0 (simple scripted agents) to Level 5 (fully autonomous, long-horizon, self-improving agents with minimal human oversight).",
+    "expected_pages": [22, 23, 24],
+    "expected_sections": ["Levels of Agency", "Agent Autonomy Spectrum"],
+    "must_retrieve_terms": ["Level 0", "Level 5", "autonomous"]
   },
   {
     "question": "How does tool use and function calling enhance the capabilities of LLM-based agents?",
-    "ground_truth": "Tool use allows agents to interact with external systems (search, calculators, APIs, code interpreters, databases). By calling functions/tools, the agent can fetch real-time information, perform precise computations, and take actions in the world that pure text generation cannot achieve, greatly expanding reliability and scope.",
-    "reference_contexts": [
-      "Equipping language models with the ability to use tools via function calling dramatically increases their usefulness as agents because they can delegate subtasks to specialized modules or external services."
-    ]
+    "ground_truth": "Tool use allows agents to interact with external systems, fetch real-time info, perform computations, and take actions beyond pure text generation.",
+    "expected_pages": [67, 68],
+    "expected_sections": ["Tool Use", "Function Calling"],
+    "must_retrieve_terms": ["function calling", "tools", "external systems"]
   },
   {
     "question": "What is the difference between traditional RAG and agentic RAG?",
-    "ground_truth": "Traditional RAG follows a fixed retrieve-then-generate pipeline. Agentic RAG introduces an agent that can dynamically decide when and how to retrieve information, use multiple tools, reflect on retrieved results, re-query if needed, and integrate retrieval into a broader reasoning and planning loop.",
-    "reference_contexts": [
-      "Agentic RAG moves beyond the single-shot retrieve-and-read paradigm by allowing the model to actively plan retrieval strategies, critique intermediate results, and perform multi-step information gathering."
-    ]
+    "ground_truth": "Traditional RAG is a fixed retrieve-then-generate pipeline. Agentic RAG uses an agent that can plan, use tools, reflect, re-query, and integrate retrieval into broader reasoning.",
+    "expected_pages": [112, 113],
+    "expected_sections": ["Agentic RAG", "Traditional RAG vs Agentic"],
+    "must_retrieve_terms": ["agentic RAG", "planning", "reflection"]
   },
   {
     "question": "What role does reflection or self-critique play in building reliable AI agents?",
-    "ground_truth": "Reflection enables an agent to review its own outputs, plans, or previous actions, identify errors or gaps, and revise its approach before finalizing a response. This iterative self-critique loop significantly reduces hallucinations and improves coherence on complex, multi-step tasks.",
-    "reference_contexts": [
-      "Self-reflection mechanisms allow agents to critique their intermediate reasoning steps and outputs, leading to more robust performance especially when combined with external feedback or tool results."
-    ]
+    "ground_truth": "Reflection allows agents to review their own outputs and plans, identify errors, and revise before finalizing, reducing hallucinations and improving coherence.",
+    "expected_pages": [78, 79],
+    "expected_sections": ["Self-Reflection", "Critique Loops"],
+    "must_retrieve_terms": ["reflection", "self-critique", "hallucinations"]
   },
   {
     "question": "Describe the Plan-and-Execute or ReWOO agent architecture.",
-    "ground_truth": "In Plan-and-Execute architectures, the agent first creates a high-level plan (often using a powerful model), then executes the steps of the plan, potentially using different (cheaper/faster) models or tools for execution. ReWOO (Reason without Observation) is a variant that generates the full plan upfront before any tool observations to reduce token usage and latency.",
-    "reference_contexts": [
-      "Separating planning from execution allows for more deliberate long-horizon reasoning and can reduce the number of expensive LLM calls during the execution phase."
-    ]
+    "ground_truth": "The agent first creates a high-level plan (often with a strong model), then executes steps (possibly with cheaper models or tools). ReWOO generates the full plan before observations to reduce latency.",
+    "expected_pages": [89, 90],
+    "expected_sections": ["Plan-and-Execute", "ReWOO"],
+    "must_retrieve_terms": ["plan", "execute", "ReWOO"]
   },
   {
     "question": "Why is memory important in agentic systems, and what types of memory are commonly used?",
-    "ground_truth": "Memory allows agents to retain information across interactions and steps. Common types include short-term/working memory (conversation history or scratchpad), long-term memory (vector stores for semantic retrieval of past experiences), and episodic memory. Without memory, agents cannot learn from past actions or maintain coherence over long tasks.",
-    "reference_contexts": [
-      "Effective agent architectures incorporate multiple memory systems: working memory for the current task, episodic memory for past experiences, and semantic memory for world knowledge."
-    ]
+    "ground_truth": "Memory allows retention across steps and interactions. Types include short-term (scratchpad), long-term (vector stores), and episodic memory.",
+    "expected_pages": [55, 56],
+    "expected_sections": ["Memory in Agents", "Types of Memory"],
+    "must_retrieve_terms": ["memory", "scratchpad", "episodic"]
   },
+  {
+    "question": "What are the main challenges in evaluating AI agents compared to traditional LLM benchmarks?",
+    "ground_truth": "Agent evaluation requires measuring multi-step trajectories, tool interactions, recovery from errors, and long-term goal achievement rather than single-turn accuracy.",
+    "expected_pages": [130, 131],
+    "expected_sections": ["Evaluating Agents", "Benchmarks"],
+    "must_retrieve_terms": ["evaluation", "trajectories", "tool use"]
+  },
+  {
+    "question": "How do multi-agent systems differ from single-agent architectures?",
+    "ground_truth": "Multi-agent systems involve specialized agents collaborating, delegating, debating. This enables division of labor and robustness but adds coordination challenges.",
+    "expected_pages": [95, 96],
+    "expected_sections": ["Multi-Agent Systems"],
+    "must_retrieve_terms": ["multi-agent", "collaboration", "delegation"]
+  },
+  {
+    "question": "What techniques can be used to make agents more reliable and reduce hallucinations?",
+    "ground_truth": "Techniques include grounding via RAG/tools, reflection loops, structured outputs, guardrails, human-in-the-loop, and verification agents.",
+    "expected_pages": [140, 141],
+    "expected_sections": ["Reliability", "Reducing Hallucinations"],
+    "must_retrieve_terms": ["hallucinations", "reflection", "guardrails"]
+  }
+],
   {
     "question": "What are the main challenges in evaluating AI agents compared to traditional LLM benchmarks?",
     "ground_truth": "Agent evaluation is harder because success depends on multi-step trajectories, tool interactions, environmental feedback, and long-term goal achievement rather than single-turn accuracy. Metrics must account for process quality (reasoning steps, tool selection) in addition to final outcomes, and environments are often non-deterministic.",

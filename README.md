@@ -39,7 +39,7 @@ from src.retrieval import get_query_engine
 results = run_evaluation(query_engine=get_query_engine())
 ```
 
-- `UnstructuredReader` for high-quality PDF parsing of the illustrated guidebook
+- LlamaIndex `SimpleDirectoryReader` for PDF parsing of the guidebook
 - `IngestionPipeline` + `SentenceSplitter` driven by `config.yaml`
 - Rich metadata per node: `page_number`, `section`, `has_code`, `has_diagram`, `document_title`
 - Persistent **Chroma** vector store at `data/processed/chroma_db/`
@@ -47,7 +47,7 @@ results = run_evaluation(query_engine=get_query_engine())
 - Idempotent ingestion + excellent logging
 - `notebooks/01_ingestion.ipynb` with test queries and node inspection
 
-Run the notebook after `pip install -e ".[dev]"` (it will pull `unstructured[pdf]`).
+Run the notebook after `pip install -e ".[dev]"`.
 
 This phase delivers:
 

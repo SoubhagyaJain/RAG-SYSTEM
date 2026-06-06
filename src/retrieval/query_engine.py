@@ -1,34 +1,68 @@
 """
 Retriever and QueryEngine factory.
 
-All retrieval/generation configuration comes from config.yaml.
-Uses the Gemma 4 8B model (via LlamaIndex Ollama integration) for generation.
+Uses:
+- Strong educational system prompt for detailed, structured Markdown answers
+- Small-to-Big retrieval on top of HierarchicalNodeParser (parent_id metadata)
 """
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import chromadb
-from llama_index.core import Settings, VectorStoreIndex
+from llama_index.core import PromptTemplate, Settings, VectorStoreIndex
 from llama_index.core.base.base_query_engine import BaseQueryEngine
+from llama_index.core.query_engine import RetrieverQueryEngine
+from llama_index.core.response_synthesizers import get_response_synthesizer
 from llama_index.core.vector_stores.types import BasePydanticVectorStore
 from llama_index.vector_stores.chroma import ChromaVectorStore
 
-from src.config import get_settings
+from src.config import _find_project_root, get_settings
 from src.logging_config import logger
+from src.retrieval.retriever import get_retriever  # New modular retrievers
+
+
+# =============================================================================
+# Strong Educational System Prompt
+# =============================================================================
+EDUCATIONAL_TEXT_QA_PROMPT = PromptTemplate(
+    "You are an expert educator and technical writer specializing in AI Agents and Agentic Systems.\n\n"
+    "Your goal is to provide **clear, comprehensive, and educational answers** based strictly on the provided context from the \"AI Agents Guidebook\".\n\n"
+    "Instructions:\n"
+    "1. Explain concepts clearly as if teaching a student. Start with simple language and intuition, then gradually add technical depth.\n"
+    "2. Structure every response in clean Markdown:\n"
+    "   - Use `##` and `###` for main sections.\n"
+    "   - Use bullet points and numbered lists.\n"
+    "   - Use **bold** for key terms.\n"
+    "   - Use fenced code blocks with language tags for code/examples.\n"
+    "   - Use blockquotes for important takeaways.\n"
+    "3. Be comprehensive but focused. Synthesize information when multiple pieces of context are relevant.\n"
+    "4. Use citations from node metadata whenever possible: (Page X), (Section: Y), or (Content Type: Z, Page X).\n"
+    "5. If the provided context is insufficient, clearly state what is missing. Do not hallucinate or use external knowledge.\n\n"
+    "Context information (retrieved via Small-to-Big):\n"
+    "---------------------\n"
+    "{context_str}\n"
+    "---------------------\n\n"
+    "Question: {query_str}\n\n"
+    "Educational Answer:\n"
+)
+
+
+# The SmallToBigRetriever (and other strategies) now live in src/retrieval/retriever.py
+# for better modularity. We re-export the main one here for backward compatibility
+# if any code imports it directly from query_engine.
+from src.retrieval.retriever import SmallToBigRetriever  # noqa: F401
 
 
 def get_vector_store() -> ChromaVectorStore:
-    """Connect to the existing persistent Chroma collection."""
+    """Connect to persistent Chroma collection."""
     settings = get_settings()
+    project_root = _find_project_root()
 
-    # Prefer top-level vector_store config
     if hasattr(settings, "vector_store") and settings.vector_store:
-        persist_dir = Path(settings.vector_store.persist_dir)
+        persist_dir = project_root / settings.vector_store.persist_dir
         collection_name = settings.vector_store.collection_name
     else:
-        persist_dir = Path(settings.llama_index.vector_store.persist_dir)
+        persist_dir = project_root / settings.llama_index.vector_store.persist_dir
         collection_name = settings.llama_index.vector_store.collection_name
 
     persist_dir.mkdir(parents=True, exist_ok=True)
@@ -36,13 +70,13 @@ def get_vector_store() -> ChromaVectorStore:
     chroma_client = chromadb.PersistentClient(path=str(persist_dir))
     chroma_collection = chroma_client.get_or_create_collection(name=collection_name)
 
-    vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
+    if chroma_collection.count() == 0:
+        raise RuntimeError(
+            f"Chroma collection '{collection_name}' is empty. "
+            "Please run ingestion first: from src.ingestion import run_ingestion; run_ingestion(force=True)"
+        )
 
-    logger.debug(
-        "Connected to Chroma vector store",
-        extra={"collection": collection_name, "persist_dir": str(persist_dir)},
-    )
-    return vector_store
+    return ChromaVectorStore(chroma_collection=chroma_collection)
 
 
 def get_query_engine(
@@ -50,21 +84,23 @@ def get_query_engine(
     similarity_top_k: int | None = None,
 ) -> BaseQueryEngine:
     """
-    Create a configured QueryEngine using the persisted vector store + Gemma 4 8B.
+    Creates a QueryEngine using the configured retrieval strategy.
 
-    All important parameters (top_k, response_mode, etc.) are driven by config.
+    The actual retriever is created in src/retrieval/retriever.py based on
+    `retrieval.mode` in config.yaml. This keeps query_engine.py focused on
+    wiring the educational prompt + response synthesizer.
     """
     settings = get_settings()
-    vector_store = vector_store or get_vector_store()
+    settings.configure_llama_index()
 
+    vector_store = vector_store or get_vector_store()
     top_k = similarity_top_k or settings.llama_index.similarity_top_k
 
     logger.info(
-        "Building QueryEngine",
+        "Creating QueryEngine",
         extra={
-            "llm_model": settings.ollama.llm_model,
+            "retrieval_mode": getattr(settings.retrieval, "mode", "small_to_big"),
             "similarity_top_k": top_k,
-            "response_mode": settings.llama_index.response_mode,
         },
     )
 
@@ -73,11 +109,27 @@ def get_query_engine(
         embed_model=Settings.embed_model,
     )
 
-    query_engine = index.as_query_engine(
-        llm=Settings.llm,
+    # Get the appropriate retriever (vector / small_to_big / hybrid)
+    # This is fully configurable via config.yaml
+    retriever = get_retriever(
+        index=index,
+        mode=getattr(settings.retrieval, "mode", "small_to_big"),
         similarity_top_k=top_k,
+        small_to_big_top_k=getattr(settings.retrieval, "small_to_big_top_k", top_k * 2),
+        hybrid_fusion_mode=getattr(settings.retrieval, "hybrid_fusion_mode", "reciprocal_rerank"),
+        bm25_top_k=getattr(settings.retrieval, "bm25_top_k", top_k),
+    )
+
+    # Always use the strong educational prompt + configured response mode
+    response_synthesizer = get_response_synthesizer(
+        llm=Settings.llm,
+        text_qa_template=EDUCATIONAL_TEXT_QA_PROMPT,
         response_mode=settings.llama_index.response_mode,
-        # We can add more advanced node_postprocessors here in later phases
+    )
+
+    query_engine = RetrieverQueryEngine(
+        retriever=retriever,
+        response_synthesizer=response_synthesizer,
     )
 
     return query_engine

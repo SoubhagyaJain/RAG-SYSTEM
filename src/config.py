@@ -27,6 +27,22 @@ class ProjectConfig(BaseModel):
     description: str = ""
 
 
+def _find_project_root() -> Path:
+    """Find the project root by walking up from __file__ or cwd looking for config.yaml or pyproject.toml.
+    This ensures paths resolve correctly even when running from notebooks/ or other subdirs.
+    """
+    # Prefer location relative to this config.py file
+    here = Path(__file__).resolve().parent.parent
+    if (here / "config.yaml").exists() or (here / "pyproject.toml").exists():
+        return here
+    # Walk up from cwd
+    current = Path.cwd().resolve()
+    for parent in [current] + list(current.parents):
+        if (parent / "config.yaml").exists() or (parent / "pyproject.toml").exists():
+            return parent
+    return current  # fallback to cwd
+
+
 class PathsConfig(BaseModel):
     data_raw: str = "data/raw"
     data_processed: str = "data/processed"
@@ -35,7 +51,7 @@ class PathsConfig(BaseModel):
     evaluation: str = "data/evaluation"
 
     def resolve(self, base_dir: Path | None = None) -> dict[str, Path]:
-        base = base_dir or Path.cwd()
+        base = base_dir or _find_project_root()
         return {k: (base / v).resolve() for k, v in self.model_dump().items()}
 
 
@@ -48,8 +64,8 @@ class OllamaConfig(BaseModel):
     base_url: str = "http://localhost:11434"
     timeout: int = 300
 
-    # LLM - Gemma 4 Latest 8B via Ollama
-    llm_model: str = "gemma4:8b"
+    # LLM - Gemma 4 Latest via Ollama (user confirmed gemma4:latest)
+    llm_model: str = "gemma4:latest"
     llm_temperature: float = 0.1
     llm_max_tokens: int = 2048
     llm_request_timeout: int = 300
@@ -71,8 +87,8 @@ class VectorStoreConfig(BaseModel):
 
 
 class LlamaIndexConfig(BaseModel):
-    chunk_size: int = 768
-    chunk_overlap: int = 120
+    chunk_size: int = 400  # Characters (with length_function=len in splitter) - conservative to prevent Ollama embed context errors
+    chunk_overlap: int = 60
     similarity_top_k: int = 10
     response_mode: str = "compact"
 
@@ -87,7 +103,7 @@ class LlamaIndexConfig(BaseModel):
 
 
 class IngestionConfig(BaseModel):
-    loader: Literal["llama_index", "pypdf", "unstructured"] = "unstructured"
+    loader: Literal["llama_index", "pypdf", "unstructured"] = "llama_index"
     use_llama_parse: bool = False
     extract_images: bool = False
     extract_tables: bool = True
@@ -175,7 +191,17 @@ class Settings(BaseSettings):
             with open(yaml_path, encoding="utf-8") as f:
                 yaml_data = yaml.safe_load(f) or {}
 
-        return cls(**yaml_data)
+        # Use model_validate for better nested model coercion (Pydantic v2)
+        obj = cls.model_validate(yaml_data)
+
+        # Sync top-level vector_store into llama_index if the top-level one was explicitly set
+        # This makes both settings.vector_store and settings.llama_index.vector_store reliable
+        if "vector_store" in yaml_data:
+            vs_data = yaml_data["vector_store"]
+            if isinstance(vs_data, dict):
+                obj.llama_index.vector_store = VectorStoreConfig(**vs_data)
+
+        return obj
 
     def configure_llama_index(self) -> None:
         """
@@ -226,4 +252,6 @@ def get_settings() -> Settings:
 
 
 # Global instance for convenience (notebooks, scripts)
+# Note: Importing this will also initialize logging (requires loguru).
+# For environments where you only want config, use: from src.config import get_settings; settings = get_settings()
 settings = get_settings()

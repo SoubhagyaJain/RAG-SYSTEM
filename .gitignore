@@ -92,3 +92,8 @@ chroma.sqlite3
 *.log
 *.tmp
 *.bak
+
+# Generated artifacts and evaluation outputs (keep repo clean)
+artifacts/
+notebooks/artifacts/
+notebooks/logs/

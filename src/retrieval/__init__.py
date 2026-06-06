@@ -1,5 +1,14 @@
-"""Retrieval and QueryEngine components (Phase 1+)."""
+"""Retrieval components for the Educational RAG System.
 
-from src.retrieval.query_engine import get_query_engine, get_vector_store
+Provides modular retrievers (vector, small-to-big, hybrid) and the main
+QueryEngine factory with the educational system prompt.
 
-__all__ = ["get_query_engine", "get_vector_store"]
+Usage example:
+    from src.retrieval import get_query_engine, get_retriever
+
+    # The mode is read from config.yaml (retrieval.mode)
+    qe = get_query_engine()
+
+    # Or get a retriever directly for advanced use
+    retriever = get_retriever(index, mode="hybrid")
+"""

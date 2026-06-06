@@ -46,7 +46,7 @@ dependencies = [
   "llama-index-embeddings-ollama>=0.3.0",
   "llama-index-vector-stores-chroma>=0.3.0",
   "llama-index-readers-file>=0.2.0",
-  "llama-index-readers-unstructured>=0.2.0",
+  "llama-index-retrievers-bm25>=0.2.0",   # For Hybrid Search (Vector + BM25)
   "unstructured[pdf]>=0.14.0",
 
   # Local model support & utilities
@@ -70,6 +70,12 @@ dev = [
   "pre-commit>=3.7",
   "jupyterlab>=4.0",
   "ipykernel>=6.0",
+  # Ragas + minimal langchain providers (ragas pulls in many LLM backends including Vertex AI)
+  "langchain>=0.2",
+  "langchain-community>=0.2",
+  "langchain-google-vertexai>=1.0",
+  # For styled DataFrames in evaluation notebook (background_gradient etc.)
+  "matplotlib>=3.8",
   # For future advanced evals / tracing
   # "llama-index-experimental",
 ]
