@@ -46,6 +46,8 @@ dependencies = [
   "llama-index-embeddings-ollama>=0.3.0",
   "llama-index-vector-stores-chroma>=0.3.0",
   "llama-index-readers-file>=0.2.0",
+  "llama-index-readers-unstructured>=0.2.0",
+  "unstructured[pdf]>=0.14.0",
 
   # Local model support & utilities
   "ollama>=0.3.0",

@@ -30,8 +30,8 @@ class ProjectConfig(BaseModel):
 class PathsConfig(BaseModel):
     data_raw: str = "data/raw"
     data_processed: str = "data/processed"
-    vector_store: str = "data/vectorstore"
     artifacts: str = "artifacts"
+    logs: str = "logs"
 
     def resolve(self, base_dir: Path | None = None) -> dict[str, Path]:
         base = base_dir or Path.cwd()
@@ -47,44 +47,51 @@ class OllamaConfig(BaseModel):
     base_url: str = "http://localhost:11434"
     timeout: int = 300
 
-    # LLM
-    llm_model: str = "gemma2:27b"
+    # LLM - Gemma 4 Latest 8B via Ollama
+    llm_model: str = "gemma4:8b"
     llm_temperature: float = 0.1
     llm_max_tokens: int = 2048
     llm_request_timeout: int = 300
+    llm_num_ctx: int = 8192
 
     # Embeddings
     embed_model: str = "nomic-embed-text"
-    embed_batch_size: int = 50
+    embed_batch_size: int = 64
 
     # Reranker (future)
     reranker_model: str = "bge-reranker-base"
 
 
+class VectorStoreConfig(BaseModel):
+    """Dedicated config for vector store (Chroma in Phase 1)."""
+    backend: Literal["chroma", "faiss", "simple"] = "chroma"
+    collection_name: str = "ai_agents_guidebook"
+    persist_dir: str = "data/processed/chroma_db"
+
+
 class LlamaIndexConfig(BaseModel):
-    chunk_size: int = 1024
-    chunk_overlap: int = 150
-    similarity_top_k: int = 8
+    chunk_size: int = 768
+    chunk_overlap: int = 120
+    similarity_top_k: int = 10
     response_mode: str = "compact"
 
-    vector_store: dict[str, Any] = Field(
-        default_factory=lambda: {
-            "backend": "chroma",
-            "collection_name": "ai_agents_guidebook",
-            "persist_dir": "data/vectorstore/chroma",
-        }
-    )
+    vector_store: VectorStoreConfig = Field(default_factory=VectorStoreConfig)
     include_metadata: bool = True
     metadata_keys_to_include: list[str] = Field(
-        default_factory=lambda: ["page_label", "file_name", "source"]
+        default_factory=lambda: [
+            "page_number", "page_label", "section", "source",
+            "has_code", "has_diagram", "document_title"
+        ]
     )
 
 
 class IngestionConfig(BaseModel):
-    loader: Literal["llama_index", "pypdf", "unstructured"] = "llama_index"
+    loader: Literal["llama_index", "pypdf", "unstructured"] = "unstructured"
     use_llama_parse: bool = False
     extract_images: bool = False
-    extract_tables: bool = False
+    extract_tables: bool = True
+    force_reingest: bool = False
+    min_chunks_threshold: int = 50
 
 
 class RetrievalConfig(BaseModel):
@@ -106,7 +113,7 @@ class EvaluationConfig(BaseModel):
     ragas_metrics: list[str] = Field(
         default_factory=lambda: ["faithfulness", "answer_relevancy", "context_precision", "context_recall"]
     )
-    llm_for_judge: str = "gemma2:27b"
+    llm_for_judge: str = "gemma4:8b"
     embed_model_for_ragas: str = "nomic-embed-text"
 
 
@@ -135,6 +142,7 @@ class Settings(BaseSettings):
     document: DocumentConfig = Field(default_factory=DocumentConfig)
     ollama: OllamaConfig = Field(default_factory=OllamaConfig)
     llama_index: LlamaIndexConfig = Field(default_factory=LlamaIndexConfig)
+    vector_store: VectorStoreConfig = Field(default_factory=VectorStoreConfig)
     ingestion: IngestionConfig = Field(default_factory=IngestionConfig)
     retrieval: RetrievalConfig = Field(default_factory=RetrievalConfig)
     generation: GenerationConfig = Field(default_factory=GenerationConfig)
@@ -170,28 +178,37 @@ class Settings(BaseSettings):
         from llama_index.embeddings.ollama import OllamaEmbedding
         from llama_index.llms.ollama import Ollama
 
-        # LLM
+        # LLM (Gemma 4 8B)
+        llm_kwargs: dict[str, Any] = {
+            "num_predict": self.ollama.llm_max_tokens,
+        }
+        if hasattr(self.ollama, "llm_num_ctx"):
+            llm_kwargs["num_ctx"] = getattr(self.ollama, "llm_num_ctx", 8192)
+
         LlamaSettings.llm = Ollama(
             model=self.ollama.llm_model,
             base_url=self.ollama.base_url,
             temperature=self.ollama.llm_temperature,
             request_timeout=self.ollama.llm_request_timeout,
-            additional_kwargs={"num_predict": self.ollama.llm_max_tokens},
+            additional_kwargs=llm_kwargs,
         )
 
-        # Embeddings
+        # Embeddings (local via Ollama)
         LlamaSettings.embed_model = OllamaEmbedding(
             model_name=self.ollama.embed_model,
             base_url=self.ollama.base_url,
             ollama_additional_kwargs={"mirostat": 0},
         )
 
-        # Chunking / node parsing defaults
+        # Chunking / node parsing defaults (used by SentenceSplitter etc.)
         LlamaSettings.chunk_size = self.llama_index.chunk_size
         LlamaSettings.chunk_overlap = self.llama_index.chunk_overlap
 
         # Retrieval defaults
         LlamaSettings.similarity_top_k = self.llama_index.similarity_top_k
+
+        # Make rich metadata keys available globally if needed
+        LlamaSettings.metadata_keys_to_include = self.llama_index.metadata_keys_to_include
 
 
 @lru_cache(maxsize=1)

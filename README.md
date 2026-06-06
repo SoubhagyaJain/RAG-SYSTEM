@@ -16,7 +16,19 @@
 - Design for future **agentic** capabilities (planning, tool use, multi-step reasoning, self-critique).
 - Evaluation-first: Ragas + custom metrics from day one.
 
-## Phase 0: Setup & Foundations (Current)
+## Phase 0: Setup & Foundations (Done)
+
+## Phase 1: Ingestion & Vector Store (Current)
+
+- `UnstructuredReader` for high-quality PDF parsing of the illustrated guidebook
+- `IngestionPipeline` + `SentenceSplitter` driven by `config.yaml`
+- Rich metadata per node: `page_number`, `section`, `has_code`, `has_diagram`, `document_title`
+- Persistent **Chroma** vector store at `data/processed/chroma_db/`
+- `QueryEngine` factory using **Gemma 4 8B**
+- Idempotent ingestion + excellent logging
+- `notebooks/01_ingestion.ipynb` with test queries and node inspection
+
+Run the notebook after `pip install -e ".[dev]"` (it will pull `unstructured[pdf]`).
 
 This phase delivers:
 
