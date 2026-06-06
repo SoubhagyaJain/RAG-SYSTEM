@@ -13,6 +13,7 @@ paths:
   data_processed: "data/processed"
   artifacts: "artifacts"
   logs: "logs"
+  evaluation: "data/evaluation"
 
 vector_store:
   persist_dir: "data/processed/chroma_db"
@@ -101,13 +102,20 @@ generation:
 # -----------------------------------------------------------------------------
 evaluation:
   enabled: true
+  dataset_path: "data/evaluation/eval_dataset.json"
+  output_dir: "artifacts/evaluation_results"
+  save_results: true
   ragas_metrics:
     - "faithfulness"
     - "answer_relevancy"
     - "context_precision"
     - "context_recall"
-  llm_for_judge: "gemma4:8b"                # Use same model or stronger
+  llm_for_judge: "gemma4:8b"                # Judge LLM (Gemma 4 8B via Ollama)
   embed_model_for_ragas: "nomic-embed-text"
+  temperature: 0.0                          # Use deterministic for evaluation
+  max_tokens: 1024
+  batch_size: 4                             # For parallel calls if supported
+  timeout: 300
 
 # -----------------------------------------------------------------------------
 # Logging

@@ -18,7 +18,26 @@
 
 ## Phase 0: Setup & Foundations (Done)
 
-## Phase 1: Ingestion & Vector Store (Current)
+## Phase 1: Ingestion & Vector Store (Complete)
+
+## Phase 2: Evaluation with Ragas (Current)
+
+- Full `RAGASEvaluator` class wrapping Ragas
+- Uses **Gemma 4 8B** (via LlamaIndex) as the judge LLM
+- Uses **nomic-embed-text** for Ragas embeddings
+- Curated dataset of 18 high-quality questions with ground truth + reference contexts
+- Metrics: faithfulness, answer_relevancy, context_precision, context_recall
+- Timestamped result saving to `artifacts/evaluation_results/`
+- Fully driven by `config.yaml`
+- `notebooks/02_evaluation.ipynb` for running and analyzing results
+
+Run evaluation with:
+```python
+from src.evaluation import run_evaluation
+from src.retrieval import get_query_engine
+
+results = run_evaluation(query_engine=get_query_engine())
+```
 
 - `UnstructuredReader` for high-quality PDF parsing of the illustrated guidebook
 - `IngestionPipeline` + `SentenceSplitter` driven by `config.yaml`

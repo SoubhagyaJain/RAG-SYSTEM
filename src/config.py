@@ -32,6 +32,7 @@ class PathsConfig(BaseModel):
     data_processed: str = "data/processed"
     artifacts: str = "artifacts"
     logs: str = "logs"
+    evaluation: str = "data/evaluation"
 
     def resolve(self, base_dir: Path | None = None) -> dict[str, Path]:
         base = base_dir or Path.cwd()
@@ -110,11 +111,18 @@ class GenerationConfig(BaseModel):
 
 class EvaluationConfig(BaseModel):
     enabled: bool = True
+    dataset_path: str = "data/evaluation/eval_dataset.json"
+    output_dir: str = "artifacts/evaluation_results"
+    save_results: bool = True
     ragas_metrics: list[str] = Field(
         default_factory=lambda: ["faithfulness", "answer_relevancy", "context_precision", "context_recall"]
     )
     llm_for_judge: str = "gemma4:8b"
     embed_model_for_ragas: str = "nomic-embed-text"
+    temperature: float = 0.0
+    max_tokens: int = 1024
+    batch_size: int = 4
+    timeout: int = 300
 
 
 class LoggingConfig(BaseModel):

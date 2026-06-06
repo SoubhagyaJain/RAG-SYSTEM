@@ -8,6 +8,7 @@ from src.logging_config import logger, setup_logging
 # Phase 1+ public API
 from src.ingestion import GuidebookIngestionPipeline, run_ingestion
 from src.retrieval import get_query_engine, get_vector_store
+from src.evaluation import RAGASEvaluator, run_evaluation
 
 __all__ = [
     "get_settings",
@@ -18,4 +19,6 @@ __all__ = [
     "run_ingestion",
     "get_query_engine",
     "get_vector_store",
+    "RAGASEvaluator",
+    "run_evaluation",
 ]

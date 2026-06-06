@@ -1,0 +1,129 @@
+[
+  {
+    "question": "What is the ReAct pattern and how does it combine reasoning with action in AI agents?",
+    "ground_truth": "ReAct (Reason + Act) is a paradigm where an agent alternates between generating reasoning traces (thoughts) and taking actions. This allows the agent to plan, execute, observe results, and adjust its reasoning dynamically, significantly improving performance on complex tasks compared to pure reasoning or pure acting.",
+    "reference_contexts": [
+      "ReAct interleaves reasoning traces and task-specific actions in an interleaved manner. This allows the agent to reason about the current state, decide on the next action, observe the outcome, and continue reasoning.",
+      "The ReAct pattern has been shown to outperform both chain-of-thought reasoning alone and acting without explicit reasoning on knowledge-intensive and decision-making tasks."
+    ]
+  },
+  {
+    "question": "Explain the five levels of agentic systems as described in modern agent literature.",
+    "ground_truth": "The five levels typically range from Level 0 (simple rule-based or scripted agents) to Level 5 (fully autonomous agents capable of long-horizon planning, self-improvement, multi-agent collaboration, and operating reliably in open-ended environments with minimal human oversight). Intermediate levels involve increasing degrees of reasoning, tool use, memory, and adaptability.",
+    "reference_contexts": [
+      "Agentic systems can be categorized into progressive levels of capability and autonomy, starting from basic reactive agents and advancing to sophisticated systems that exhibit goal-directed behavior over long time horizons."
+    ]
+  },
+  {
+    "question": "How does tool use and function calling enhance the capabilities of LLM-based agents?",
+    "ground_truth": "Tool use allows agents to interact with external systems (search, calculators, APIs, code interpreters, databases). By calling functions/tools, the agent can fetch real-time information, perform precise computations, and take actions in the world that pure text generation cannot achieve, greatly expanding reliability and scope.",
+    "reference_contexts": [
+      "Equipping language models with the ability to use tools via function calling dramatically increases their usefulness as agents because they can delegate subtasks to specialized modules or external services."
+    ]
+  },
+  {
+    "question": "What is the difference between traditional RAG and agentic RAG?",
+    "ground_truth": "Traditional RAG follows a fixed retrieve-then-generate pipeline. Agentic RAG introduces an agent that can dynamically decide when and how to retrieve information, use multiple tools, reflect on retrieved results, re-query if needed, and integrate retrieval into a broader reasoning and planning loop.",
+    "reference_contexts": [
+      "Agentic RAG moves beyond the single-shot retrieve-and-read paradigm by allowing the model to actively plan retrieval strategies, critique intermediate results, and perform multi-step information gathering."
+    ]
+  },
+  {
+    "question": "What role does reflection or self-critique play in building reliable AI agents?",
+    "ground_truth": "Reflection enables an agent to review its own outputs, plans, or previous actions, identify errors or gaps, and revise its approach before finalizing a response. This iterative self-critique loop significantly reduces hallucinations and improves coherence on complex, multi-step tasks.",
+    "reference_contexts": [
+      "Self-reflection mechanisms allow agents to critique their intermediate reasoning steps and outputs, leading to more robust performance especially when combined with external feedback or tool results."
+    ]
+  },
+  {
+    "question": "Describe the Plan-and-Execute or ReWOO agent architecture.",
+    "ground_truth": "In Plan-and-Execute architectures, the agent first creates a high-level plan (often using a powerful model), then executes the steps of the plan, potentially using different (cheaper/faster) models or tools for execution. ReWOO (Reason without Observation) is a variant that generates the full plan upfront before any tool observations to reduce token usage and latency.",
+    "reference_contexts": [
+      "Separating planning from execution allows for more deliberate long-horizon reasoning and can reduce the number of expensive LLM calls during the execution phase."
+    ]
+  },
+  {
+    "question": "Why is memory important in agentic systems, and what types of memory are commonly used?",
+    "ground_truth": "Memory allows agents to retain information across interactions and steps. Common types include short-term/working memory (conversation history or scratchpad), long-term memory (vector stores for semantic retrieval of past experiences), and episodic memory. Without memory, agents cannot learn from past actions or maintain coherence over long tasks.",
+    "reference_contexts": [
+      "Effective agent architectures incorporate multiple memory systems: working memory for the current task, episodic memory for past experiences, and semantic memory for world knowledge."
+    ]
+  },
+  {
+    "question": "What are the main challenges in evaluating AI agents compared to traditional LLM benchmarks?",
+    "ground_truth": "Agent evaluation is harder because success depends on multi-step trajectories, tool interactions, environmental feedback, and long-term goal achievement rather than single-turn accuracy. Metrics must account for process quality (reasoning steps, tool selection) in addition to final outcomes, and environments are often non-deterministic.",
+    "reference_contexts": [
+      "Evaluating agents requires new benchmarks that measure not just final answers but the quality of the reasoning process, tool usage efficiency, and ability to recover from errors over extended interactions."
+    ]
+  },
+  {
+    "question": "How do multi-agent systems differ from single-agent architectures?",
+    "ground_truth": "Multi-agent systems involve multiple specialized agents that collaborate, delegate tasks, debate, or critique each other. This can lead to better division of labor, emergent behaviors, and robustness through redundancy, but introduces challenges in coordination, communication protocols, and conflict resolution.",
+    "reference_contexts": [
+      "Multi-agent collaboration enables complex workflows where different agents handle planning, research, coding, and critique roles, often outperforming monolithic single-agent designs on sophisticated tasks."
+    ]
+  },
+  {
+    "question": "What techniques can be used to make agents more reliable and reduce hallucinations?",
+    "ground_truth": "Techniques include: grounding via retrieval (RAG), tool use for factual lookup, reflection/self-critique loops, structured output formats (JSON/pydantic), human-in-the-loop oversight, verification agents, and constrained decoding or guardrails. Combining multiple techniques is usually most effective.",
+    "reference_contexts": [
+      "Reliability in agents comes from architectural patterns that force grounding in external knowledge or tools rather than relying solely on parametric knowledge of the underlying LLM."
+    ]
+  },
+  {
+    "question": "Explain the concept of hierarchical agents or agent hierarchies.",
+    "ground_truth": "Hierarchical agents have a manager or planner agent that decomposes high-level goals into subtasks and delegates them to specialized worker agents. This mirrors organizational structures and helps manage complexity in long-horizon or multi-domain tasks by providing clear separation of concerns and abstraction levels.",
+    "reference_contexts": [
+      "Hierarchical decomposition allows a high-level agent to break down complex goals and orchestrate lower-level agents that execute specific capabilities, improving scalability and maintainability."
+    ]
+  },
+  {
+    "question": "What is the role of guardrails and safety mechanisms in production agent systems?",
+    "ground_truth": "Guardrails enforce constraints on agent behavior, such as preventing harmful actions, limiting tool access, validating outputs, and ensuring compliance with policies. They are essential for deploying agents safely in real-world environments where uncontrolled actions could cause damage or violate regulations.",
+    "reference_contexts": [
+      "Production agent systems require multiple layers of guardrails, including input/output filtering, tool permission systems, and runtime monitoring to prevent unintended or unsafe behaviors."
+    ]
+  },
+  {
+    "question": "How does the choice of LLM (e.g., Gemma 4 8B vs larger models) affect agent performance?",
+    "ground_truth": "Smaller models like Gemma 4 8B are faster and cheaper but may have weaker reasoning, poorer instruction following, and more hallucinations. Larger models generally produce better plans and tool calls but at higher latency and cost. Many production systems use a mix: strong models for planning/critique and smaller/faster models for execution.",
+    "reference_contexts": [
+      "Agent performance is highly sensitive to the underlying model's reasoning capability, especially for planning, reflection, and complex tool orchestration tasks."
+    ]
+  },
+  {
+    "question": "What is the difference between chain-of-thought, tree-of-thoughts, and graph-of-thoughts reasoning in agents?",
+    "ground_truth": "Chain-of-thought is linear step-by-step reasoning. Tree-of-thoughts explores multiple reasoning branches in parallel and can backtrack. Graph-of-thoughts models reasoning as a graph allowing more complex dependencies and aggregation of intermediate thoughts. These represent increasing expressiveness for tackling hard problems.",
+    "reference_contexts": [
+      "More advanced reasoning structures such as trees and graphs allow agents to explore alternatives, evaluate partial solutions, and combine insights in ways linear chains cannot."
+    ]
+  },
+  {
+    "question": "Why might an agent need to perform multiple retrieval steps during a single task?",
+    "ground_truth": "Complex questions often require information from multiple sources or iterative refinement. An agent may retrieve initial context, realize it is insufficient or contradictory, then issue follow-up retrievals (or use different tools) based on intermediate reasoning. This is a core capability of agentic RAG versus single-shot RAG.",
+    "reference_contexts": [
+      "Agentic systems frequently engage in multi-hop retrieval where the results of one search inform the query for the next, enabling answers that require synthesizing information across documents or domains."
+    ]
+  },
+  {
+    "question": "What are common failure modes observed in current LLM-based agents?",
+    "ground_truth": "Common failures include: getting stuck in loops, poor tool selection or parameter mistakes, losing track of the original goal (context drift), hallucinating tool results, failing to backtrack from bad paths, and over-confidently providing wrong final answers without sufficient grounding.",
+    "reference_contexts": [
+      "Understanding recurring failure modes such as reasoning loops, tool misuse, and goal misalignment is critical for designing better agent architectures and evaluation suites."
+    ]
+  },
+  {
+    "question": "How can human-in-the-loop (HITL) mechanisms improve agent reliability?",
+    "ground_truth": "HITL allows humans to approve, edit, or reject agent plans/actions at critical points. This is especially valuable for high-stakes domains. It provides a safety net, enables continuous improvement through feedback, and can be used to collect high-quality training data for future agent versions.",
+    "reference_contexts": [
+      "Strategic insertion of human oversight points in agent workflows balances autonomy with safety and is a key pattern for production deployment of agentic systems."
+    ]
+  },
+  {
+    "question": "What metrics beyond final answer accuracy are important when evaluating agentic RAG systems?",
+    "ground_truth": "Important metrics include: faithfulness (groundedness of answer in retrieved context), context precision and recall (quality of retrieval), number of steps/tool calls, latency, cost, recovery from errors, and human preference or task success rate in realistic environments. Process metrics are often more diagnostic than outcome-only metrics.",
+    "reference_contexts": [
+      "Evaluating agentic systems requires looking at the entire trajectory: retrieval quality, reasoning faithfulness, efficiency, and robustness, not just whether the final answer happens to be correct."
+    ]
+  }
+]
