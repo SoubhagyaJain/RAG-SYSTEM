@@ -1,0 +1,133 @@
+# =============================================================================
+# Enterprise Agentic RAG System - Central Configuration
+# All tunable parameters live here. Code should read from the loaded Config
+# object (see src/config.py), never hardcode values.
+# =============================================================================
+
+project:
+  name: "enterprise-rag-ai-agents"
+  version: "0.1.0"
+  description: "Production-grade Agentic RAG over the AI Agents Guidebook"
+
+paths:
+  data_raw: "data/raw"
+  data_processed: "data/processed"
+  vector_store: "data/vectorstore"
+  # Add more as pipelines grow (logs, artifacts, etc.)
+
+document:
+  # Primary source document for Phase 0/1
+  primary_pdf: "ai_agents_guidebook.pdf"
+  # Future: support for multiple documents, web sources, Notion, etc.
+
+ingestion:
+  loader: "pypdf"                    # pypdf | pdfplumber | unstructured | ...
+  extract_images: false
+  extract_tables: false
+  ocr: false                         # Phase 2+
+  metadata:
+    source: "AI Agents Guidebook"
+    domain: "ai-agents"
+    version: "2025"                  # update when new edition appears
+
+chunking:
+  strategy: "recursive"              # recursive | semantic | agentic | hierarchical
+  chunk_size_tokens: 800
+  chunk_overlap_tokens: 120
+  separators: ["\n\n", "\n", ". ", " ", ""]   # order matters
+  keep_separator: true
+  length_function: "tiktoken"        # tiktoken | char | word
+  encoding_name: "cl100k_base"       # used when length_function=tiktoken
+
+  # Future semantic chunking parameters (Phase 2+)
+  semantic:
+    embedding_model: "text-embedding-3-small"
+    breakpoint_threshold_type: "percentile"
+    breakpoint_threshold_amount: 95
+
+indexing:
+  embedding:
+    provider: "openai"               # openai | cohere | huggingface | voyage | local
+    model: "text-embedding-3-small"
+    dimensions: 1536                 # set explicitly for some providers
+    batch_size: 100
+    max_retries: 5
+
+  vector_store:
+    backend: "chromadb"              # chromadb | faiss | pgvector | pinecone | weaviate
+    collection_name: "ai_agents_guidebook"
+    persist_directory: "data/vectorstore/chroma"
+    distance_metric: "cosine"        # cosine | l2 | ip
+
+  # Optional: add document-level and chunk-level metadata to store
+
+retrieval:
+  top_k: 8
+  fetch_k: 30                        # for MMR / over-fetch before rerank
+  search_type: "similarity"          # similarity | mmr | hybrid
+  mmr_lambda: 0.5
+
+  # Reranking (Phase 2+)
+  reranker:
+    enabled: false
+    provider: "cohere"               # cohere | bge | cross-encoder | llm
+    model: "rerank-english-v3.0"
+    top_n: 6
+
+  # Future: query rewriting, HyDE, multi-query expansion, agentic routing
+
+generation:
+  llm:
+    provider: "openai"               # openai | anthropic | groq | together | azure | ollama
+    model: "gpt-4o-mini"
+    temperature: 0.2
+    max_tokens: 1200
+    top_p: 0.95
+    timeout: 60
+
+  # Prompt strategy (will evolve with agentic patterns)
+  prompt_version: "v1_baseline"
+  system_prompt_name: "rag_system_v1"
+  include_citations: true
+  citation_style: "page"             # page | section | both
+
+  # Guardrails / output parsing (Phase 1+)
+  # output_parser: "json" | "pydantic" | null
+
+evaluation:
+  enabled: true
+  frameworks: ["custom", "ragas"]    # ragas will be added in Phase 2
+  metrics:
+    - name: "context_relevance"
+      enabled: true
+    - name: "faithfulness"
+      enabled: true
+    - name: "answer_relevance"
+      enabled: true
+    - name: "citation_accuracy"
+      enabled: true                   # custom metric: do citations match source pages?
+
+  # Golden dataset location (to be created)
+  golden_dataset: "data/eval/golden_dataset.jsonl"
+
+  # Cost & latency tracking
+  track_cost: true
+  track_latency: true
+
+logging:
+  level: "INFO"                      # DEBUG | INFO | WARNING | ERROR
+  json_logs: false                   # set true in production / containers
+  log_to_file: true
+  log_file: "logs/rag_system.log"
+  rotation: "10 MB"
+  retention: "14 days"
+
+# -----------------------------------------------------------------------------
+# Environment-specific overrides (loaded based on RAG_ENV or similar)
+# -----------------------------------------------------------------------------
+# development:
+#   logging.level: "DEBUG"
+#
+# production:
+#   logging.json_logs: true
+#   retrieval.top_k: 12

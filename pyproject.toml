@@ -1,0 +1,117 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "enterprise-rag-ai-agents"
+version = "0.1.0"
+description = "Production-grade Agentic RAG System over the AI Agents Guidebook"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "Proprietary"}
+authors = [
+  { name = "Soubhagya Jain", email = "you@example.com" }
+]
+keywords = ["rag", "ai-agents", "retrieval-augmented-generation", "llm", "production"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+dependencies = [
+  # Core
+  "pydantic>=2.8",
+  "pydantic-settings>=2.3",
+  "pyyaml>=6.0",
+  "python-dotenv>=1.0",
+  "loguru>=0.7",
+
+  # Document processing (Phase 0)
+  "pypdf>=4.3",
+
+  # Text / token handling
+  "tiktoken>=0.7",
+
+  # Chunking (lightweight, high quality)
+  "langchain-text-splitters>=0.3.0",
+
+  # Embeddings + Vector (foundational)
+  "openai>=1.35",
+  "numpy>=1.26",
+  "chromadb>=0.5.0",
+
+  # Reliability
+  "tenacity>=8.2",
+
+  # Utilities
+  "rich>=13.0",
+  "typer>=0.12",
+]
+
+[project.optional-dependencies]
+dev = [
+  "ruff>=0.5",
+  "pytest>=8.0",
+  "pytest-asyncio>=0.23",
+  "mypy>=1.10",
+  "pre-commit>=3.7",
+  "jupyterlab>=4.0",
+  "ipykernel>=6.0",
+  # Evaluation frameworks (Phase 2+)
+  # "ragas>=0.1",
+  # "deepeval>=0.1",
+]
+
+[project.scripts]
+rag = "app.main:cli"   # placeholder for future CLI
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "src",
+  "config.yaml",
+  "README.md",
+]
+
+# -----------------------------------------------------------------------------
+# Tooling configuration (professional standards)
+# -----------------------------------------------------------------------------
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+extend-exclude = ["notebooks/*", "data/*", ".venv/*"]
+
+[tool.ruff.lint]
+select = [
+  "E", "F", "I", "UP", "B", "SIM", "C4", "PIE", "Q", "RUF",
+]
+ignore = ["E501", "B008"]  # line length handled by formatter, B008 for typer/fastapi
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+ignore_missing_imports = true   # relax for some heavy libs during early phases
+exclude = ["notebooks", "data", "tests"]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+addopts = "-ra -q --strict-markers"
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.typer]
+# Future CLI configuration
