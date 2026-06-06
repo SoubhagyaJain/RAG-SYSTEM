@@ -1,133 +1,117 @@
 # =============================================================================
-# Enterprise Agentic RAG System - Central Configuration
-# All tunable parameters live here. Code should read from the loaded Config
-# object (see src/config.py), never hardcode values.
+# Enterprise Agentic RAG System - Configuration (LlamaIndex + Ollama)
 # =============================================================================
+# All settings are loaded via src/config.py into a strongly-typed Settings object.
+# Never hardcode model names, paths, or retrieval parameters in source code.
 
 project:
   name: "enterprise-rag-ai-agents"
   version: "0.1.0"
-  description: "Production-grade Agentic RAG over the AI Agents Guidebook"
+  description: "Production-grade Agentic RAG over the AI Agents Guidebook (LlamaIndex + local Gemma via Ollama)"
 
 paths:
   data_raw: "data/raw"
   data_processed: "data/processed"
   vector_store: "data/vectorstore"
-  # Add more as pipelines grow (logs, artifacts, etc.)
+  artifacts: "artifacts"
 
 document:
-  # Primary source document for Phase 0/1
   primary_pdf: "ai_agents_guidebook.pdf"
-  # Future: support for multiple documents, web sources, Notion, etc.
+  source_name: "AI Agents Guidebook"
 
+# -----------------------------------------------------------------------------
+# Ollama Configuration (Local models only)
+# -----------------------------------------------------------------------------
+ollama:
+  base_url: "http://localhost:11434"   # Change if Ollama runs elsewhere
+  timeout: 300                         # seconds for long generations
+
+  # LLM: Gemma 4 Latest (update tag as new versions are released in Ollama)
+  llm_model: "gemma2:27b"              # or "gemma2:9b", "gemma3", etc. Use what you have pulled
+  llm_temperature: 0.1
+  llm_max_tokens: 2048
+  llm_request_timeout: 300
+
+  # Embeddings - Local via Ollama
+  embed_model: "nomic-embed-text"      # or "mxbai-embed-large", "snowflake-arctic-embed", etc.
+  embed_batch_size: 50
+
+  # Reranker (future Phase) - can be a cross-encoder via Ollama or sentence-transformers
+  reranker_model: "bge-reranker-base"  # placeholder; will be used when we add reranking
+
+# -----------------------------------------------------------------------------
+# LlamaIndex Core Settings
+# -----------------------------------------------------------------------------
+llama_index:
+  chunk_size: 1024
+  chunk_overlap: 150
+  similarity_top_k: 8
+  response_mode: "compact"             # compact | tree_summarize | refine | etc.
+
+  # Vector index settings
+  vector_store:
+    backend: "chroma"                  # chroma | faiss | simple (in-memory)
+    collection_name: "ai_agents_guidebook"
+    persist_dir: "data/vectorstore/chroma"
+
+  # Node parsing / metadata
+  include_metadata: true
+  metadata_keys_to_include:
+    - "page_label"
+    - "file_name"
+    - "source"
+
+# -----------------------------------------------------------------------------
+# Ingestion & Preprocessing
+# -----------------------------------------------------------------------------
 ingestion:
-  loader: "pypdf"                    # pypdf | pdfplumber | unstructured | ...
+  loader: "llama_index"                # llama_index | pypdf | unstructured (future)
+  use_llama_parse: false               # Set true if you have LlamaParse API key later
   extract_images: false
   extract_tables: false
-  ocr: false                         # Phase 2+
-  metadata:
-    source: "AI Agents Guidebook"
-    domain: "ai-agents"
-    version: "2025"                  # update when new edition appears
 
-chunking:
-  strategy: "recursive"              # recursive | semantic | agentic | hierarchical
-  chunk_size_tokens: 800
-  chunk_overlap_tokens: 120
-  separators: ["\n\n", "\n", ". ", " ", ""]   # order matters
-  keep_separator: true
-  length_function: "tiktoken"        # tiktoken | char | word
-  encoding_name: "cl100k_base"       # used when length_function=tiktoken
-
-  # Future semantic chunking parameters (Phase 2+)
-  semantic:
-    embedding_model: "text-embedding-3-small"
-    breakpoint_threshold_type: "percentile"
-    breakpoint_threshold_amount: 95
-
-indexing:
-  embedding:
-    provider: "openai"               # openai | cohere | huggingface | voyage | local
-    model: "text-embedding-3-small"
-    dimensions: 1536                 # set explicitly for some providers
-    batch_size: 100
-    max_retries: 5
-
-  vector_store:
-    backend: "chromadb"              # chromadb | faiss | pgvector | pinecone | weaviate
-    collection_name: "ai_agents_guidebook"
-    persist_directory: "data/vectorstore/chroma"
-    distance_metric: "cosine"        # cosine | l2 | ip
-
-  # Optional: add document-level and chunk-level metadata to store
-
+# -----------------------------------------------------------------------------
+# Retrieval & Generation
+# -----------------------------------------------------------------------------
 retrieval:
   top_k: 8
-  fetch_k: 30                        # for MMR / over-fetch before rerank
-  search_type: "similarity"          # similarity | mmr | hybrid
+  fetch_k: 25                          # for MMR / over-retrieval before rerank
+  use_hybrid_search: false             # enable in later phase with BM25 + vector
+  use_reranker: false                  # enable after we integrate reranker
+
+  # MMR diversity (when enabled)
   mmr_lambda: 0.5
 
-  # Reranking (Phase 2+)
-  reranker:
-    enabled: false
-    provider: "cohere"               # cohere | bge | cross-encoder | llm
-    model: "rerank-english-v3.0"
-    top_n: 6
-
-  # Future: query rewriting, HyDE, multi-query expansion, agentic routing
-
 generation:
-  llm:
-    provider: "openai"               # openai | anthropic | groq | together | azure | ollama
-    model: "gpt-4o-mini"
-    temperature: 0.2
-    max_tokens: 1200
-    top_p: 0.95
-    timeout: 60
-
-  # Prompt strategy (will evolve with agentic patterns)
-  prompt_version: "v1_baseline"
-  system_prompt_name: "rag_system_v1"
+  system_prompt_version: "v1_baseline"
   include_citations: true
-  citation_style: "page"             # page | section | both
+  citation_format: "page"              # page | section | both
 
-  # Guardrails / output parsing (Phase 1+)
-  # output_parser: "json" | "pydantic" | null
-
+# -----------------------------------------------------------------------------
+# Evaluation (Ragas)
+# -----------------------------------------------------------------------------
 evaluation:
   enabled: true
-  frameworks: ["custom", "ragas"]    # ragas will be added in Phase 2
-  metrics:
-    - name: "context_relevance"
-      enabled: true
-    - name: "faithfulness"
-      enabled: true
-    - name: "answer_relevance"
-      enabled: true
-    - name: "citation_accuracy"
-      enabled: true                   # custom metric: do citations match source pages?
+  ragas_metrics:
+    - "faithfulness"
+    - "answer_relevancy"
+    - "context_precision"
+    - "context_recall"
+  llm_for_judge: "gemma2:27b"          # Can be same or stronger model
+  embed_model_for_ragas: "nomic-embed-text"
 
-  # Golden dataset location (to be created)
-  golden_dataset: "data/eval/golden_dataset.jsonl"
-
-  # Cost & latency tracking
-  track_cost: true
-  track_latency: true
-
+# -----------------------------------------------------------------------------
+# Logging & Observability
+# -----------------------------------------------------------------------------
 logging:
-  level: "INFO"                      # DEBUG | INFO | WARNING | ERROR
-  json_logs: false                   # set true in production / containers
+  level: "INFO"
+  json_logs: false
   log_to_file: true
   log_file: "logs/rag_system.log"
   rotation: "10 MB"
-  retention: "14 days"
+  retention: "30 days"
 
-# -----------------------------------------------------------------------------
-# Environment-specific overrides (loaded based on RAG_ENV or similar)
-# -----------------------------------------------------------------------------
+# Environment-specific overrides example (future use)
 # development:
 #   logging.level: "DEBUG"
-#
-# production:
-#   logging.json_logs: true
-#   retrieval.top_k: 12
+#   ollama.llm_temperature: 0.3

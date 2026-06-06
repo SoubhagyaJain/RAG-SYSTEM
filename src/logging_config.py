@@ -1,14 +1,7 @@
 """
-Production-grade structured logging configuration.
+Production logging configuration using loguru.
 
-Uses loguru for beautiful console output + optional JSON/file logging.
-All application code should import `logger` from here.
-
-Example:
-    from src.logging_config import logger, setup_logging
-
-    setup_logging()
-    logger.info("Pipeline started", extra={"phase": "ingestion", "doc": "guidebook"})
+Import `logger` after calling `setup_logging()` (done automatically on import).
 """
 
 from __future__ import annotations
@@ -22,21 +15,13 @@ from src.config import get_settings
 
 
 def setup_logging() -> None:
-    """
-    Configure loguru sinks based on config.yaml + environment.
+    """Configure loguru sinks based on config.yaml."""
+    cfg = get_settings().logging
 
-    - Rich colored console (always)
-    - Rotating file logs (optional)
-    - JSON structured logs for production (optional)
-    """
-    settings = get_settings()
-    log_cfg = settings.logging
-
-    # Remove default handler
     logger.remove()
 
-    # Console handler (beautiful for humans)
-    console_format = (
+    # Human-friendly console
+    console_fmt = (
         "<green>{time:YYYY-MM-DD HH:mm:ss.SSS}</green> | "
         "<level>{level: <8}</level> | "
         "<cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - "
@@ -44,56 +29,49 @@ def setup_logging() -> None:
     )
     logger.add(
         sys.stderr,
-        level=log_cfg.level,
-        format=console_format,
+        level=cfg.level,
+        format=console_fmt,
         colorize=True,
         backtrace=False,
         diagnose=False,
     )
 
     # File logging
-    if log_cfg.log_to_file:
-        log_path = Path(log_cfg.log_file)
+    if cfg.log_to_file:
+        log_path = Path(cfg.log_file)
         log_path.parent.mkdir(parents=True, exist_ok=True)
 
-        file_format = (
-            "{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | "
-            "{name}:{function}:{line} - {message} | {extra}"
-        )
-
+        file_fmt = "{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} - {message} | {extra}"
         logger.add(
             log_path,
-            level=log_cfg.level,
-            format=file_format,
-            rotation=log_cfg.rotation,
-            retention=log_cfg.retention,
+            level=cfg.level,
+            format=file_fmt,
+            rotation=cfg.rotation,
+            retention=cfg.retention,
             compression="zip",
             enqueue=True,
             backtrace=True,
             diagnose=True,
         )
 
-    # JSON logging (great for containers / centralized logging)
-    if log_cfg.json_logs:
+    # JSON mode (useful for containers / centralized logging)
+    if cfg.json_logs:
         logger.add(
             sys.stderr,
-            level=log_cfg.level,
+            level=cfg.level,
             format="{message}",
-            serialize=True,  # produces JSON
-            filter=lambda record: record["level"].no >= 20,  # INFO and above
+            serialize=True,
         )
 
     logger.info(
         "Logging initialized",
         extra={
-            "level": log_cfg.level,
-            "json": log_cfg.json_logs,
-            "file": str(log_cfg.log_file) if log_cfg.log_to_file else None,
-            "env": settings.rag_env,
+            "level": cfg.level,
+            "json": cfg.json_logs,
+            "env": get_settings().rag_env,
         },
     )
 
 
-# Default logger instance for direct import
-# Call setup_logging() once at application entrypoint (CLI, notebook, FastAPI lifespan, etc.)
+# Auto-initialize on import
 setup_logging()

@@ -1,1 +1,1 @@
-"""Application layer (API / UI / CLI) - Phase 0 placeholder."""
+"""Application layer (CLI / API / UI) - Phase 0 placeholder."""

@@ -1,124 +1,122 @@
 # Enterprise Agentic RAG System
 
-**Production-grade, agentic Retrieval-Augmented Generation platform** built for deep reasoning over technical guidebooks and enterprise knowledge bases.
+**Production-grade Agentic Retrieval-Augmented Generation** over the *AI Agents Guidebook* (117-page illustrated reference).
 
-**Current Focus:** "AI Agents Guidebook" (117-page illustrated reference) — a comprehensive guide to building, evaluating, and operating AI agents.
+**Current Tech Stack (Phase 0):**
+- **Framework**: LlamaIndex (primary)
+- **LLM**: Gemma (latest) via Ollama (fully local)
+- **Embeddings & Reranker**: Local models served by Ollama
+- **Evaluation**: Ragas
+- **Vector Store**: Chroma (via LlamaIndex) — easily swappable
 
-## Project Philosophy
+## Goals
 
-- **Production-first**: Type-safe config, structured logging, observability hooks, reproducible pipelines, and clean separation of concerns.
-- **Agentic by design**: Foundations support future multi-step reasoning, tool use, self-critique, query planning, and iterative retrieval.
-- **Modular & Extensible**: Every major stage (ingestion → chunking → indexing → retrieval → generation → evaluation) is replaceable.
-- **Evaluation-driven**: Metrics and golden datasets are first-class from day one.
+- Build a **truly production-ready** RAG system with strong foundations.
+- Start fully local (Ollama) for cost control, privacy, and iteration speed.
+- Design for future **agentic** capabilities (planning, tool use, multi-step reasoning, self-critique).
+- Evaluation-first: Ragas + custom metrics from day one.
 
-## Current Phase: Phase 0 — Setup & Foundations
+## Phase 0: Setup & Foundations (Current)
 
-**Goals accomplished in this phase:**
-- Professional project layout (src layout, packaging, Docker)
-- Strongly-typed configuration (YAML + Pydantic + .env)
-- Production logging setup
-- PDF ingestion foundation (page-aware extraction)
-- Configurable chunking strategies (extensible to semantic/agentic)
-- Vector indexing abstractions (ready for Chroma / FAISS / PGVector)
-- Retrieval and generation interfaces
-- Evaluation scaffolding
-- Reproducible notebook for Phase 0 validation
+This phase delivers:
 
-## Quick Start
-
-### 1. Prerequisites
-- Python 3.11+
-- Recommended: [uv](https://docs.astral.sh/uv/) (fastest) or pip + venv
-
-### 2. Setup Environment
-
-```bash
-# Clone or open the folder
-cd C:\Users\jains\OneDrive\Desktop\RAG-SYSTEM   # or your local path
-
-# Create virtual environment (uv recommended)
-uv venv
-.venv\Scripts\activate     # Windows PowerShell
-
-# Install the project in editable mode with dev dependencies
-uv pip install -e ".[dev]"
-# or: pip install -e ".[dev]"
-```
-
-### 3. Configure Secrets
-
-```bash
-cp .env.example .env
-# Edit .env and add your OPENAI_API_KEY (and others as needed)
-```
-
-### 4. Place the Source Document
-
-Copy the guidebook into the raw data folder:
-
-```bash
-# From your Downloads (example)
-copy "$env:USERPROFILE\Downloads\AI Agents guidebook.pdf" "data\raw\ai_agents_guidebook.pdf"
-```
-
-### 5. Run Phase 0 Validation Notebook
-
-Open and run:
-
-```bash
-jupyter lab notebooks/00_phase0_setup.ipynb
-```
-
-Or execute the setup validation script (to be added in later phases).
+- Clean professional project structure
+- Strongly-typed configuration (`config.yaml` + Pydantic)
+- Production logging (loguru)
+- Seamless LlamaIndex + Ollama integration
+- PDF ingestion using LlamaIndex `SimpleDirectoryReader`
+- Configurable node parsing / chunking
+- Setup notebook that validates the entire foundation
+- Docker scaffolding
+- Ready for persistent vector stores and full pipelines in Phase 1
 
 ## Project Structure
 
 ```
-enterprise-rag-ai-agents/          # (this repo root)
+enterprise-rag-ai-agents/
 ├── .env.example
-├── .gitignore
-├── config.yaml                    # All tunable parameters
+├── config.yaml                  # All models, chunk sizes, retrieval params, etc.
 ├── pyproject.toml
 ├── README.md
 ├── src/
-│   ├── config.py                  # Pydantic settings + YAML loader
-│   ├── logging_config.py          # Structured logging (loguru)
-│   ├── ingestion/                 # Document loading & preprocessing
-│   ├── chunking/                  # Text splitting strategies
-│   ├── indexing/                  # Embedding + vector store
-│   ├── retrieval/                 # Retrievers + rerankers
-│   ├── generation/                # LLM calls + prompt engineering
-│   ├── evaluation/                # RAGAS-style + custom metrics
+│   ├── __init__.py
+│   ├── config.py                # Settings + LlamaIndex configuration helper
+│   ├── logging_config.py
 │   └── utils/
 ├── notebooks/
-│   └── 00_phase0_setup.ipynb
+│   └── 00_setup.ipynb           # Phase 0 validation notebook
 ├── docker/
-│   └── Dockerfile
-├── tests/
 ├── data/
-│   ├── raw/                       # Original PDFs, docs
-│   └── processed/                 # Chunked JSONL, metadata, etc.
-└── app/                           # Future: FastAPI / Streamlit / Agent UI
+│   ├── raw/                     # ai_agents_guidebook.pdf lives here
+│   └── processed/
+├── app/                         # Future CLI / API / UI
+└── tests/
 ```
 
-## Roadmap (High-level)
+## Quick Start
 
-- **Phase 0**: Foundations & PDF ingestion (current)
-- **Phase 1**: Indexing + basic retrieval + simple generation
-- **Phase 2**: Evaluation harness + golden dataset creation
-- **Phase 3**: Agentic patterns (query rewriting, multi-hop, tool use, critique loops)
-- **Phase 4**: Advanced retrieval (hybrid, graph, agentic routing)
-- **Phase 5**: Production serving, observability, cost tracking, CI/CD
+### 1. Prerequisites
 
-## Key Design Decisions (Phase 0)
+- Python 3.11+
+- [Ollama](https://ollama.com) installed and running
+- Recommended: `uv` for fast dependency management
 
-- **Config-driven everything**: No magic numbers in code.
-- **Page-aware ingestion**: Preserve page numbers and section structure for citations.
-- **Token-aware chunking**: Target chunk size in tokens (not chars) for better embedding behavior.
-- **Pluggable components**: Interfaces + factory functions so you can swap splitters, embedders, vector stores, and LLMs without touching pipelines.
-- **Observability hooks**: Every major stage emits structured logs + (future) traces.
+### 2. Pull Required Models
 
-## Contributing / Development
+```bash
+ollama pull gemma2:27b          # or gemma2:9b / whatever "Gemma 4 Latest" maps to
+ollama pull nomic-embed-text    # or mxbai-embed-large, etc.
+```
+
+### 3. Setup Python Environment
+
+```powershell
+cd "C:\Users\jains\OneDrive\Desktop\RAG-SYSTEM"
+
+# Using uv (recommended)
+uv venv
+.venv\Scripts\activate
+uv pip install -e ".[dev]"
+
+# Or with pip
+python -m venv .venv
+.venv\Scripts\activate
+pip install -e ".[dev]"
+```
+
+### 4. Configure Environment
+
+```powershell
+copy .env.example .env
+# Edit .env if your Ollama runs on a different host/port
+```
+
+### 5. Run the Phase 0 Setup Notebook
+
+```powershell
+jupyter lab notebooks/00_setup.ipynb
+```
+
+The notebook will:
+- Load and validate configuration
+- Configure LlamaIndex global `Settings` with your Ollama models
+- Verify model availability
+- Load the AI Agents Guidebook
+- Create nodes using LlamaIndex `SentenceSplitter`
+- (Optional) Run a small vector index query
+
+## Configuration Highlights
+
+All important knobs live in `config.yaml`:
+
+- `ollama.llm_model` → Gemma via Ollama
+- `ollama.embed_model` → Local embedding model
+- `llama_index.chunk_size` / `chunk_overlap`
+- `llama_index.similarity_top_k`
+- `retrieval.top_k`, reranker toggle, hybrid search flags
+- Ragas metrics and judge model
+
+## Development Commands
 
 ```bash
 # Linting & formatting
@@ -132,10 +130,20 @@ pytest
 mypy src
 ```
 
-## License
+## Roadmap
 
-Internal / proprietary for now. Adjust as needed.
+- **Phase 0** — Foundations + LlamaIndex + Ollama setup (current)
+- **Phase 1** — Full ingestion pipeline, persistent Chroma index, basic query engine
+- **Phase 2** — Advanced retrieval (hybrid, reranking), citation handling
+- **Phase 3** — Ragas evaluation harness + golden dataset
+- **Phase 4+** — Agentic patterns on top of LlamaIndex (query engines, agents, tools, reflection loops)
+
+## Notes
+
+- The project is designed to stay **local-first**. Cloud LLM fallbacks can be added later via LlamaIndex's multi-LLM support.
+- Large PDFs are stored in `data/raw/` (consider Git LFS if you push frequently).
+- All LlamaIndex global settings are driven from `src/config.py` → `settings.configure_llama_index()`.
 
 ---
 
-**Next milestone**: Complete a working end-to-end ingest → chunk → index → retrieve → answer loop with the AI Agents Guidebook and baseline metrics.
+**Next milestone**: Build a complete `IngestionPipeline` + `VectorStoreIndex` that can answer questions from the full AI Agents Guidebook using only local models.

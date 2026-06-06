@@ -1,16 +1,8 @@
 """
-Central configuration loader for the Enterprise Agentic RAG System.
+Production-grade configuration loader for Enterprise Agentic RAG (LlamaIndex + Ollama).
 
-Loads:
-- config.yaml (base configuration)
-- .env (secrets and environment-specific overrides)
-- Applies Pydantic validation and type coercion
-
-Usage:
-    from src.config import get_settings, Settings
-
-    settings: Settings = get_settings()
-    print(settings.chunking.chunk_size_tokens)
+Loads config.yaml + .env and exposes a validated Settings object.
+LlamaIndex settings are also configured from this module.
 """
 
 from __future__ import annotations
@@ -25,6 +17,10 @@ from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+# -----------------------------------------------------------------------------
+# Sub-config models
+# -----------------------------------------------------------------------------
+
 class ProjectConfig(BaseModel):
     name: str = "enterprise-rag-ai-agents"
     version: str = "0.1.0"
@@ -35,119 +31,83 @@ class PathsConfig(BaseModel):
     data_raw: str = "data/raw"
     data_processed: str = "data/processed"
     vector_store: str = "data/vectorstore"
+    artifacts: str = "artifacts"
 
     def resolve(self, base_dir: Path | None = None) -> dict[str, Path]:
-        """Return absolute paths relative to project root or provided base."""
         base = base_dir or Path.cwd()
-        return {
-            "data_raw": (base / self.data_raw).resolve(),
-            "data_processed": (base / self.data_processed).resolve(),
-            "vector_store": (base / self.vector_store).resolve(),
-        }
+        return {k: (base / v).resolve() for k, v in self.model_dump().items()}
 
 
 class DocumentConfig(BaseModel):
     primary_pdf: str = "ai_agents_guidebook.pdf"
-    source: str = "AI Agents Guidebook"
+    source_name: str = "AI Agents Guidebook"
+
+
+class OllamaConfig(BaseModel):
+    base_url: str = "http://localhost:11434"
+    timeout: int = 300
+
+    # LLM
+    llm_model: str = "gemma2:27b"
+    llm_temperature: float = 0.1
+    llm_max_tokens: int = 2048
+    llm_request_timeout: int = 300
+
+    # Embeddings
+    embed_model: str = "nomic-embed-text"
+    embed_batch_size: int = 50
+
+    # Reranker (future)
+    reranker_model: str = "bge-reranker-base"
+
+
+class LlamaIndexConfig(BaseModel):
+    chunk_size: int = 1024
+    chunk_overlap: int = 150
+    similarity_top_k: int = 8
+    response_mode: str = "compact"
+
+    vector_store: dict[str, Any] = Field(
+        default_factory=lambda: {
+            "backend": "chroma",
+            "collection_name": "ai_agents_guidebook",
+            "persist_dir": "data/vectorstore/chroma",
+        }
+    )
+    include_metadata: bool = True
+    metadata_keys_to_include: list[str] = Field(
+        default_factory=lambda: ["page_label", "file_name", "source"]
+    )
 
 
 class IngestionConfig(BaseModel):
-    loader: Literal["pypdf", "pdfplumber", "unstructured"] = "pypdf"
+    loader: Literal["llama_index", "pypdf", "unstructured"] = "llama_index"
+    use_llama_parse: bool = False
     extract_images: bool = False
     extract_tables: bool = False
-    ocr: bool = False
-    metadata: dict[str, Any] = Field(default_factory=dict)
-
-
-class ChunkingConfig(BaseModel):
-    strategy: Literal["recursive", "semantic", "agentic", "hierarchical"] = "recursive"
-    chunk_size_tokens: int = Field(800, ge=128, le=8192)
-    chunk_overlap_tokens: int = Field(120, ge=0, le=2048)
-    separators: list[str] = Field(default_factory=lambda: ["\n\n", "\n", ". ", " ", ""])
-    keep_separator: bool = True
-    length_function: Literal["tiktoken", "char", "word"] = "tiktoken"
-    encoding_name: str = "cl100k_base"
-
-    @field_validator("chunk_overlap_tokens")
-    @classmethod
-    def validate_overlap(cls, v: int, info: Any) -> int:
-        chunk_size = info.data.get("chunk_size_tokens", 800)
-        if v >= chunk_size:
-            raise ValueError("chunk_overlap_tokens must be strictly less than chunk_size_tokens")
-        return v
-
-
-class EmbeddingConfig(BaseModel):
-    provider: Literal["openai", "cohere", "huggingface", "voyage", "local"] = "openai"
-    model: str = "text-embedding-3-small"
-    dimensions: int | None = 1536
-    batch_size: int = Field(100, ge=1, le=2048)
-    max_retries: int = 5
-
-
-class VectorStoreConfig(BaseModel):
-    backend: Literal["chromadb", "faiss", "pgvector", "pinecone", "weaviate"] = "chromadb"
-    collection_name: str = "ai_agents_guidebook"
-    persist_directory: str = "data/vectorstore/chroma"
-    distance_metric: Literal["cosine", "l2", "ip"] = "cosine"
-
-
-class IndexingConfig(BaseModel):
-    embedding: EmbeddingConfig = Field(default_factory=EmbeddingConfig)
-    vector_store: VectorStoreConfig = Field(default_factory=VectorStoreConfig)
-
-
-class RerankerConfig(BaseModel):
-    enabled: bool = False
-    provider: str = "cohere"
-    model: str = "rerank-english-v3.0"
-    top_n: int = 6
 
 
 class RetrievalConfig(BaseModel):
-    top_k: int = Field(8, ge=1, le=50)
-    fetch_k: int = Field(30, ge=1, le=100)
-    search_type: Literal["similarity", "mmr", "hybrid"] = "similarity"
-    mmr_lambda: float = Field(0.5, ge=0.0, le=1.0)
-    reranker: RerankerConfig = Field(default_factory=RerankerConfig)
-
-
-class LLMConfig(BaseModel):
-    provider: Literal["openai", "anthropic", "groq", "together", "azure", "ollama"] = "openai"
-    model: str = "gpt-4o-mini"
-    temperature: float = Field(0.2, ge=0.0, le=2.0)
-    max_tokens: int = Field(1200, ge=64, le=32768)
-    top_p: float = 0.95
-    timeout: int = 60
+    top_k: int = 8
+    fetch_k: int = 25
+    use_hybrid_search: bool = False
+    use_reranker: bool = False
+    mmr_lambda: float = 0.5
 
 
 class GenerationConfig(BaseModel):
-    llm: LLMConfig = Field(default_factory=LLMConfig)
-    prompt_version: str = "v1_baseline"
-    system_prompt_name: str = "rag_system_v1"
+    system_prompt_version: str = "v1_baseline"
     include_citations: bool = True
-    citation_style: Literal["page", "section", "both"] = "page"
-
-
-class MetricConfig(BaseModel):
-    name: str
-    enabled: bool = True
+    citation_format: Literal["page", "section", "both"] = "page"
 
 
 class EvaluationConfig(BaseModel):
     enabled: bool = True
-    frameworks: list[str] = Field(default_factory=lambda: ["custom"])
-    metrics: list[MetricConfig] = Field(
-        default_factory=lambda: [
-            MetricConfig(name="context_relevance"),
-            MetricConfig(name="faithfulness"),
-            MetricConfig(name="answer_relevance"),
-            MetricConfig(name="citation_accuracy"),
-        ]
+    ragas_metrics: list[str] = Field(
+        default_factory=lambda: ["faithfulness", "answer_relevancy", "context_precision", "context_recall"]
     )
-    golden_dataset: str = "data/eval/golden_dataset.jsonl"
-    track_cost: bool = True
-    track_latency: bool = True
+    llm_for_judge: str = "gemma2:27b"
+    embed_model_for_ragas: str = "nomic-embed-text"
 
 
 class LoggingConfig(BaseModel):
@@ -156,11 +116,11 @@ class LoggingConfig(BaseModel):
     log_to_file: bool = True
     log_file: str = "logs/rag_system.log"
     rotation: str = "10 MB"
-    retention: str = "14 days"
+    retention: str = "30 days"
 
 
 class Settings(BaseSettings):
-    """Root settings object. Combines YAML config + environment variables."""
+    """Root validated settings object."""
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -173,44 +133,72 @@ class Settings(BaseSettings):
     project: ProjectConfig = Field(default_factory=ProjectConfig)
     paths: PathsConfig = Field(default_factory=PathsConfig)
     document: DocumentConfig = Field(default_factory=DocumentConfig)
+    ollama: OllamaConfig = Field(default_factory=OllamaConfig)
+    llama_index: LlamaIndexConfig = Field(default_factory=LlamaIndexConfig)
     ingestion: IngestionConfig = Field(default_factory=IngestionConfig)
-    chunking: ChunkingConfig = Field(default_factory=ChunkingConfig)
-    indexing: IndexingConfig = Field(default_factory=IndexingConfig)
     retrieval: RetrievalConfig = Field(default_factory=RetrievalConfig)
     generation: GenerationConfig = Field(default_factory=GenerationConfig)
     evaluation: EvaluationConfig = Field(default_factory=EvaluationConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
 
-    # Runtime
     rag_env: Literal["development", "staging", "production"] = "development"
 
     @field_validator("rag_env", mode="before")
     @classmethod
-    def _read_rag_env(cls, v: Any) -> Any:
+    def _read_env(cls, v: Any) -> Any:
         return v or os.getenv("RAG_ENV", "development")
 
     @classmethod
     def from_yaml(cls, yaml_path: str | Path = "config.yaml") -> Settings:
-        """Load base configuration from YAML then overlay with Pydantic settings (.env)."""
         yaml_path = Path(yaml_path)
         if not yaml_path.exists():
-            # Fallback to default in-package config if running from src
             yaml_path = Path(__file__).parent.parent / "config.yaml"
 
-        yaml_config: dict[str, Any] = {}
+        yaml_data: dict[str, Any] = {}
         if yaml_path.exists():
             with open(yaml_path, encoding="utf-8") as f:
-                yaml_config = yaml.safe_load(f) or {}
+                yaml_data = yaml.safe_load(f) or {}
 
-        # Instantiate with yaml values; Pydantic will also read .env on top
-        return cls(**yaml_config)
+        return cls(**yaml_data)
+
+    def configure_llama_index(self) -> None:
+        """
+        Apply settings to global LlamaIndex Settings.
+        Call this early in your application / notebook.
+        """
+        from llama_index.core import Settings as LlamaSettings
+        from llama_index.embeddings.ollama import OllamaEmbedding
+        from llama_index.llms.ollama import Ollama
+
+        # LLM
+        LlamaSettings.llm = Ollama(
+            model=self.ollama.llm_model,
+            base_url=self.ollama.base_url,
+            temperature=self.ollama.llm_temperature,
+            request_timeout=self.ollama.llm_request_timeout,
+            additional_kwargs={"num_predict": self.ollama.llm_max_tokens},
+        )
+
+        # Embeddings
+        LlamaSettings.embed_model = OllamaEmbedding(
+            model_name=self.ollama.embed_model,
+            base_url=self.ollama.base_url,
+            ollama_additional_kwargs={"mirostat": 0},
+        )
+
+        # Chunking / node parsing defaults
+        LlamaSettings.chunk_size = self.llama_index.chunk_size
+        LlamaSettings.chunk_overlap = self.llama_index.chunk_overlap
+
+        # Retrieval defaults
+        LlamaSettings.similarity_top_k = self.llama_index.similarity_top_k
 
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    """Cached settings singleton. Call this everywhere instead of instantiating directly."""
+    """Singleton settings accessor."""
     return Settings.from_yaml()
 
 
-# Convenience for notebooks / scripts
+# Global instance for convenience (notebooks, scripts)
 settings = get_settings()

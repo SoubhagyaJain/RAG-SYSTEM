@@ -1,4 +1,4 @@
-"""IO helpers used across the pipeline."""
+"""Simple IO utilities used across pipelines."""
 
 from __future__ import annotations
 
@@ -19,3 +19,11 @@ def save_jsonl(path: str | Path, records: list[dict[str, Any]]) -> None:
     with open(path, "w", encoding="utf-8") as f:
         for rec in records:
             f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+
+
+def load_jsonl(path: str | Path) -> list[dict[str, Any]]:
+    path = Path(path)
+    if not path.exists():
+        return []
+    with open(path, encoding="utf-8") as f:
+        return [json.loads(line) for line in f if line.strip()]

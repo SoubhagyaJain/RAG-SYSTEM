@@ -1,25 +1,36 @@
 """
-Future CLI / application entrypoint.
+CLI entrypoint (Phase 0 placeholder).
 
-For now this is a placeholder. Phase 1+ will add:
-- `rag ingest`
-- `rag index`
-- `rag query "your question"`
-- `rag evaluate`
+Future commands will include:
+- rag ingest
+- rag index
+- rag query "question here"
+- rag evaluate
 """
 
 import typer
 
-app = typer.Typer(help="Enterprise Agentic RAG System")
+app = typer.Typer(help="Enterprise Agentic RAG System (LlamaIndex + Ollama)")
 
 
 @app.command()
-def hello() -> None:
-    """Sanity check command."""
-    typer.echo("Enterprise RAG system - Phase 0 foundations ready.")
+def hello():
+    """Sanity check."""
+    typer.echo("Enterprise RAG System - Phase 0 (LlamaIndex + Ollama) foundations ready.")
 
 
-def cli() -> None:
+@app.command()
+def config():
+    """Print current resolved configuration (safe subset)."""
+    from src.config import get_settings
+    s = get_settings()
+    typer.echo(f"Project: {s.project.name} v{s.project.version}")
+    typer.echo(f"Ollama LLM: {s.ollama.llm_model}")
+    typer.echo(f"Ollama Embed: {s.ollama.embed_model}")
+    typer.echo(f"Chunk size: {s.llama_index.chunk_size}")
+
+
+def cli():
     app()
 
 
