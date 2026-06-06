@@ -112,11 +112,39 @@ class IngestionConfig(BaseModel):
 
 
 class RetrievalConfig(BaseModel):
+    """Configuration for retrieval strategy (vector / small_to_big / hybrid)."""
+
+    # Primary switch - matches the factory in src/retrieval/retriever.py
+    mode: str = "small_to_big"  # "vector" | "small_to_big" | "hybrid"
+
     top_k: int = 8
     fetch_k: int = 25
+
+    # Small-to-Big (real parent node expansion)
+    small_to_big_top_k: int = 15
+    small_to_big_max_parents: int = 6
+
+    # Hybrid (Vector + BM25 via QueryFusionRetriever)
+    hybrid_fusion_mode: str = "reciprocal_rerank"  # "simple" | "reciprocal_rerank"
+    bm25_top_k: int = 10
+
+    # Legacy / future options (still accepted from yaml)
     use_hybrid_search: bool = False
     use_reranker: bool = False
     mmr_lambda: float = 0.5
+
+    # Metadata-based score boosting / bias correction (see MetadataBoosterPostprocessor)
+    # Supports nested structure in config.yaml:
+    #   retrieval:
+    #     metadata_boosting:
+    #       enabled: true
+    #       memory_section_penalty: 0.6
+    #       boost_important_sections: true
+    metadata_boosting: dict = Field(default_factory=lambda: {
+        "enabled": False,
+        "memory_section_penalty": 0.6,
+        "boost_important_sections": True,
+    })
 
 
 class GenerationConfig(BaseModel):

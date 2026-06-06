@@ -1,150 +1,128 @@
 [
   {
     "question": "What is the ReAct pattern and how does it combine reasoning with action in AI agents?",
-    "ground_truth": "ReAct (Reason + Act) is a paradigm where an agent alternates between generating reasoning traces (thoughts) and taking actions. This allows the agent to plan, execute, observe results, and adjust its reasoning dynamically.",
-    "expected_pages": [45, 46, 47],
-    "expected_sections": ["ReAct Pattern", "Reason + Act Loop"],
-    "must_retrieve_terms": ["ReAct", "reasoning traces", "act"]
+    "ground_truth": "ReAct (Reason + Act) is a paradigm where an agent alternates between generating reasoning traces (thoughts) and taking actions using tools. This allows the agent to plan, execute, observe results from the environment, and dynamically adjust its reasoning in a loop until it reaches a final answer.",
+    "expected_pages": [45, 46, 47, 48],
+    "expected_sections": ["ReAct Pattern", "Reason + Act Loop", "Agent Reasoning"],
+    "must_retrieve_terms": ["ReAct", "reasoning traces", "act", "observation", "Thought → Action → Observation"]
   },
   {
     "question": "Explain the five levels of agentic systems as described in modern agent literature.",
-    "ground_truth": "The five levels range from Level 0 (simple scripted agents) to Level 5 (fully autonomous, long-horizon, self-improving agents with minimal human oversight).",
-    "expected_pages": [22, 23, 24],
-    "expected_sections": ["Levels of Agency", "Agent Autonomy Spectrum"],
-    "must_retrieve_terms": ["Level 0", "Level 5", "autonomous"]
+    "ground_truth": "The five levels of agentic systems range from Level 0 (simple scripted or rule-based agents) to Level 5 (fully autonomous agents capable of long-horizon planning, self-improvement, and minimal human oversight). Higher levels demonstrate increasing autonomy, reasoning depth, and ability to operate independently.",
+    "expected_pages": [22, 23, 24, 25],
+    "expected_sections": ["Levels of Agency", "Agent Autonomy Spectrum", "5 Levels of Agentic AI"],
+    "must_retrieve_terms": ["Level 0", "Level 5", "autonomous", "agentic systems", "autonomy"]
   },
   {
     "question": "How does tool use and function calling enhance the capabilities of LLM-based agents?",
-    "ground_truth": "Tool use allows agents to interact with external systems, fetch real-time info, perform computations, and take actions beyond pure text generation.",
-    "expected_pages": [67, 68],
-    "expected_sections": ["Tool Use", "Function Calling"],
-    "must_retrieve_terms": ["function calling", "tools", "external systems"]
+    "ground_truth": "Tool use and function calling allow agents to interact with external systems, fetch real-time information, perform computations, execute actions, and access data beyond what is available in the model's training data or retrieved context.",
+    "expected_pages": [67, 68, 69],
+    "expected_sections": ["Tool Use", "Function Calling", "Tool Integration"],
+    "must_retrieve_terms": ["function calling", "tools", "external systems", "tool use"]
   },
   {
     "question": "What is the difference between traditional RAG and agentic RAG?",
-    "ground_truth": "Traditional RAG is a fixed retrieve-then-generate pipeline. Agentic RAG uses an agent that can plan, use tools, reflect, re-query, and integrate retrieval into broader reasoning.",
-    "expected_pages": [112, 113],
-    "expected_sections": ["Agentic RAG", "Traditional RAG vs Agentic"],
-    "must_retrieve_terms": ["agentic RAG", "planning", "reflection"]
+    "ground_truth": "Traditional RAG follows a fixed retrieve-then-generate pipeline. Agentic RAG uses an agent that can plan, decide when and what to retrieve, use tools, reflect on results, re-query if needed, and integrate retrieval into a broader multi-step reasoning process.",
+    "expected_pages": [112, 113, 114],
+    "expected_sections": ["Agentic RAG", "Traditional RAG vs Agentic RAG"],
+    "must_retrieve_terms": ["agentic RAG", "planning", "reflection", "multi-step"]
   },
   {
     "question": "What role does reflection or self-critique play in building reliable AI agents?",
-    "ground_truth": "Reflection allows agents to review their own outputs and plans, identify errors, and revise before finalizing, reducing hallucinations and improving coherence.",
-    "expected_pages": [78, 79],
-    "expected_sections": ["Self-Reflection", "Critique Loops"],
-    "must_retrieve_terms": ["reflection", "self-critique", "hallucinations"]
+    "ground_truth": "Reflection (or self-critique) allows agents to review their own outputs, plans, or intermediate steps, identify errors or inconsistencies, and revise their approach before producing a final answer. This significantly reduces hallucinations and improves reliability.",
+    "expected_pages": [78, 79, 80],
+    "expected_sections": ["Self-Reflection", "Critique Loops", "Agent Reliability"],
+    "must_retrieve_terms": ["reflection", "self-critique", "hallucinations", "revise"]
   },
   {
     "question": "Describe the Plan-and-Execute or ReWOO agent architecture.",
-    "ground_truth": "The agent first creates a high-level plan (often with a strong model), then executes steps (possibly with cheaper models or tools). ReWOO generates the full plan before observations to reduce latency.",
-    "expected_pages": [89, 90],
-    "expected_sections": ["Plan-and-Execute", "ReWOO"],
-    "must_retrieve_terms": ["plan", "execute", "ReWOO"]
+    "ground_truth": "In Plan-and-Execute architecture, the agent first creates a high-level plan (often using a stronger model) and then executes the steps (possibly using smaller/faster models or tools). ReWOO generates the entire plan upfront before making observations to reduce latency from repeated LLM calls.",
+    "expected_pages": [89, 90, 91],
+    "expected_sections": ["Plan-and-Execute", "ReWOO", "Agent Architectures"],
+    "must_retrieve_terms": ["plan", "execute", "ReWOO", "planning"]
   },
   {
     "question": "Why is memory important in agentic systems, and what types of memory are commonly used?",
-    "ground_truth": "Memory allows retention across steps and interactions. Types include short-term (scratchpad), long-term (vector stores), and episodic memory.",
-    "expected_pages": [55, 56],
-    "expected_sections": ["Memory in Agents", "Types of Memory"],
-    "must_retrieve_terms": ["memory", "scratchpad", "episodic"]
+    "ground_truth": "Memory allows agents to retain information across multiple steps and interactions. Common types include short-term memory (scratchpad/context window), long-term memory (vector stores), and episodic memory (past experiences and outcomes).",
+    "expected_pages": [55, 56, 57],
+    "expected_sections": ["Memory in Agents", "Types of Memory", "Agent Memory"],
+    "must_retrieve_terms": ["memory", "scratchpad", "episodic", "long-term memory"]
   },
   {
     "question": "What are the main challenges in evaluating AI agents compared to traditional LLM benchmarks?",
-    "ground_truth": "Agent evaluation requires measuring multi-step trajectories, tool interactions, recovery from errors, and long-term goal achievement rather than single-turn accuracy.",
-    "expected_pages": [130, 131],
-    "expected_sections": ["Evaluating Agents", "Benchmarks"],
-    "must_retrieve_terms": ["evaluation", "trajectories", "tool use"]
+    "ground_truth": "Agent evaluation is more complex because it requires measuring multi-step trajectories, tool interactions, error recovery, planning quality, and long-term goal achievement, rather than single-turn accuracy. Process metrics and task success rates are often more important than final answer correctness alone.",
+    "expected_pages": [130, 131, 132],
+    "expected_sections": ["Evaluating Agents", "Benchmarks", "Agent Evaluation"],
+    "must_retrieve_terms": ["evaluation", "trajectories", "tool use", "multi-step"]
   },
   {
     "question": "How do multi-agent systems differ from single-agent architectures?",
-    "ground_truth": "Multi-agent systems involve specialized agents collaborating, delegating, debating. This enables division of labor and robustness but adds coordination challenges.",
-    "expected_pages": [95, 96],
-    "expected_sections": ["Multi-Agent Systems"],
-    "must_retrieve_terms": ["multi-agent", "collaboration", "delegation"]
+    "ground_truth": "Multi-agent systems involve multiple specialized agents that collaborate, delegate tasks, debate, or coordinate to solve problems. This enables division of labor and greater robustness but introduces challenges in communication, coordination, and conflict resolution.",
+    "expected_pages": [95, 96, 97],
+    "expected_sections": ["Multi-Agent Systems", "Agent Collaboration"],
+    "must_retrieve_terms": ["multi-agent", "collaboration", "delegation", "coordination"]
   },
   {
     "question": "What techniques can be used to make agents more reliable and reduce hallucinations?",
-    "ground_truth": "Techniques include grounding via RAG/tools, reflection loops, structured outputs, guardrails, human-in-the-loop, and verification agents.",
-    "expected_pages": [140, 141],
-    "expected_sections": ["Reliability", "Reducing Hallucinations"],
-    "must_retrieve_terms": ["hallucinations", "reflection", "guardrails"]
-  }
-],
-  {
-    "question": "What are the main challenges in evaluating AI agents compared to traditional LLM benchmarks?",
-    "ground_truth": "Agent evaluation is harder because success depends on multi-step trajectories, tool interactions, environmental feedback, and long-term goal achievement rather than single-turn accuracy. Metrics must account for process quality (reasoning steps, tool selection) in addition to final outcomes, and environments are often non-deterministic.",
-    "reference_contexts": [
-      "Evaluating agents requires new benchmarks that measure not just final answers but the quality of the reasoning process, tool usage efficiency, and ability to recover from errors over extended interactions."
-    ]
-  },
-  {
-    "question": "How do multi-agent systems differ from single-agent architectures?",
-    "ground_truth": "Multi-agent systems involve multiple specialized agents that collaborate, delegate tasks, debate, or critique each other. This can lead to better division of labor, emergent behaviors, and robustness through redundancy, but introduces challenges in coordination, communication protocols, and conflict resolution.",
-    "reference_contexts": [
-      "Multi-agent collaboration enables complex workflows where different agents handle planning, research, coding, and critique roles, often outperforming monolithic single-agent designs on sophisticated tasks."
-    ]
-  },
-  {
-    "question": "What techniques can be used to make agents more reliable and reduce hallucinations?",
-    "ground_truth": "Techniques include: grounding via retrieval (RAG), tool use for factual lookup, reflection/self-critique loops, structured output formats (JSON/pydantic), human-in-the-loop oversight, verification agents, and constrained decoding or guardrails. Combining multiple techniques is usually most effective.",
-    "reference_contexts": [
-      "Reliability in agents comes from architectural patterns that force grounding in external knowledge or tools rather than relying solely on parametric knowledge of the underlying LLM."
-    ]
+    "ground_truth": "Techniques include grounding via RAG and tools, reflection/self-critique loops, structured output formats, guardrails, human-in-the-loop oversight, verification agents, and constraining the agent's action space.",
+    "expected_pages": [140, 141, 142],
+    "expected_sections": ["Reliability", "Reducing Hallucinations", "Agent Guardrails"],
+    "must_retrieve_terms": ["hallucinations", "reflection", "guardrails", "reliability"]
   },
   {
     "question": "Explain the concept of hierarchical agents or agent hierarchies.",
-    "ground_truth": "Hierarchical agents have a manager or planner agent that decomposes high-level goals into subtasks and delegates them to specialized worker agents. This mirrors organizational structures and helps manage complexity in long-horizon or multi-domain tasks by providing clear separation of concerns and abstraction levels.",
-    "reference_contexts": [
-      "Hierarchical decomposition allows a high-level agent to break down complex goals and orchestrate lower-level agents that execute specific capabilities, improving scalability and maintainability."
-    ]
+    "ground_truth": "Hierarchical agents consist of a manager or planner agent that decomposes high-level goals into smaller subtasks and delegates them to specialized worker agents. This structure helps manage complexity in long-horizon tasks by providing clear separation of concerns and abstraction levels.",
+    "expected_pages": [85, 86, 87],
+    "expected_sections": ["Hierarchical Agents", "Agent Hierarchies"],
+    "must_retrieve_terms": ["hierarchical", "manager agent", "delegation", "subtasks"]
   },
   {
     "question": "What is the role of guardrails and safety mechanisms in production agent systems?",
-    "ground_truth": "Guardrails enforce constraints on agent behavior, such as preventing harmful actions, limiting tool access, validating outputs, and ensuring compliance with policies. They are essential for deploying agents safely in real-world environments where uncontrolled actions could cause damage or violate regulations.",
-    "reference_contexts": [
-      "Production agent systems require multiple layers of guardrails, including input/output filtering, tool permission systems, and runtime monitoring to prevent unintended or unsafe behaviors."
-    ]
+    "ground_truth": "Guardrails enforce constraints on agent behavior to prevent harmful actions, limit tool access, validate outputs, and ensure compliance with safety policies. They are critical for deploying agents safely in real-world environments.",
+    "expected_pages": [140, 141],
+    "expected_sections": ["Guardrails", "Safety Mechanisms"],
+    "must_retrieve_terms": ["guardrails", "safety", "constraints", "validation"]
   },
   {
     "question": "How does the choice of LLM (e.g., Gemma 4 8B vs larger models) affect agent performance?",
-    "ground_truth": "Smaller models like Gemma 4 8B are faster and cheaper but may have weaker reasoning, poorer instruction following, and more hallucinations. Larger models generally produce better plans and tool calls but at higher latency and cost. Many production systems use a mix: strong models for planning/critique and smaller/faster models for execution.",
-    "reference_contexts": [
-      "Agent performance is highly sensitive to the underlying model's reasoning capability, especially for planning, reflection, and complex tool orchestration tasks."
-    ]
+    "ground_truth": "Smaller models like Gemma 4 8B are faster and cheaper but often have weaker reasoning, poorer instruction following, and higher hallucination rates. Larger models generally produce better plans and tool calls but incur higher latency and cost. Many systems use a mix of models for different roles.",
+    "expected_pages": [15, 16],
+    "expected_sections": ["LLM Choice", "Model Selection"],
+    "must_retrieve_terms": ["Gemma", "larger models", "reasoning", "latency"]
   },
   {
     "question": "What is the difference between chain-of-thought, tree-of-thoughts, and graph-of-thoughts reasoning in agents?",
-    "ground_truth": "Chain-of-thought is linear step-by-step reasoning. Tree-of-thoughts explores multiple reasoning branches in parallel and can backtrack. Graph-of-thoughts models reasoning as a graph allowing more complex dependencies and aggregation of intermediate thoughts. These represent increasing expressiveness for tackling hard problems.",
-    "reference_contexts": [
-      "More advanced reasoning structures such as trees and graphs allow agents to explore alternatives, evaluate partial solutions, and combine insights in ways linear chains cannot."
-    ]
+    "ground_truth": "Chain-of-thought is linear step-by-step reasoning. Tree-of-thoughts explores multiple reasoning branches in parallel and allows backtracking. Graph-of-thoughts models reasoning as a graph, enabling more complex dependencies and aggregation of intermediate thoughts.",
+    "expected_pages": [27, 28, 29],
+    "expected_sections": ["Reasoning Patterns", "Chain-of-Thought", "Tree-of-Thoughts"],
+    "must_retrieve_terms": ["chain-of-thought", "tree-of-thoughts", "graph-of-thoughts"]
   },
   {
     "question": "Why might an agent need to perform multiple retrieval steps during a single task?",
-    "ground_truth": "Complex questions often require information from multiple sources or iterative refinement. An agent may retrieve initial context, realize it is insufficient or contradictory, then issue follow-up retrievals (or use different tools) based on intermediate reasoning. This is a core capability of agentic RAG versus single-shot RAG.",
-    "reference_contexts": [
-      "Agentic systems frequently engage in multi-hop retrieval where the results of one search inform the query for the next, enabling answers that require synthesizing information across documents or domains."
-    ]
+    "ground_truth": "Complex tasks often require information from multiple sources or iterative refinement. An agent may retrieve initial context, realize it is insufficient, then perform follow-up retrievals based on intermediate reasoning. This iterative retrieval is a key advantage of agentic RAG over traditional single-shot RAG.",
+    "expected_pages": [112, 113, 114],
+    "expected_sections": ["Agentic RAG", "Iterative Retrieval"],
+    "must_retrieve_terms": ["multiple retrieval", "iterative", "agentic RAG"]
   },
   {
     "question": "What are common failure modes observed in current LLM-based agents?",
-    "ground_truth": "Common failures include: getting stuck in loops, poor tool selection or parameter mistakes, losing track of the original goal (context drift), hallucinating tool results, failing to backtrack from bad paths, and over-confidently providing wrong final answers without sufficient grounding.",
-    "reference_contexts": [
-      "Understanding recurring failure modes such as reasoning loops, tool misuse, and goal misalignment is critical for designing better agent architectures and evaluation suites."
-    ]
+    "ground_truth": "Common failures include getting stuck in loops, poor tool selection or parameter mistakes, context drift (losing track of the original goal), hallucinating tool results, failing to backtrack from bad paths, and over-confidently giving wrong answers without proper grounding.",
+    "expected_pages": [140, 141, 142],
+    "expected_sections": ["Failure Modes", "Agent Reliability"],
+    "must_retrieve_terms": ["failure modes", "loops", "hallucination", "context drift"]
   },
   {
     "question": "How can human-in-the-loop (HITL) mechanisms improve agent reliability?",
-    "ground_truth": "HITL allows humans to approve, edit, or reject agent plans/actions at critical points. This is especially valuable for high-stakes domains. It provides a safety net, enables continuous improvement through feedback, and can be used to collect high-quality training data for future agent versions.",
-    "reference_contexts": [
-      "Strategic insertion of human oversight points in agent workflows balances autonomy with safety and is a key pattern for production deployment of agentic systems."
-    ]
+    "ground_truth": "HITL mechanisms allow humans to review, approve, edit, or reject agent plans and actions at critical points. This provides safety, enables error correction, supports continuous improvement through feedback, and helps collect high-quality data for future agent training.",
+    "expected_pages": [140, 141],
+    "expected_sections": ["Human-in-the-Loop", "HITL"],
+    "must_retrieve_terms": ["human-in-the-loop", "HITL", "oversight", "feedback"]
   },
   {
     "question": "What metrics beyond final answer accuracy are important when evaluating agentic RAG systems?",
-    "ground_truth": "Important metrics include: faithfulness (groundedness of answer in retrieved context), context precision and recall (quality of retrieval), number of steps/tool calls, latency, cost, recovery from errors, and human preference or task success rate in realistic environments. Process metrics are often more diagnostic than outcome-only metrics.",
-    "reference_contexts": [
-      "Evaluating agentic systems requires looking at the entire trajectory: retrieval quality, reasoning faithfulness, efficiency, and robustness, not just whether the final answer happens to be correct."
-    ]
+    "ground_truth": "Important metrics include faithfulness to retrieved context, context precision and recall, number of steps/tool calls, latency, cost, error recovery rate, task success rate, and human preference. Process-oriented metrics are often more diagnostic than final answer accuracy alone.",
+    "expected_pages": [130, 131, 132],
+    "expected_sections": ["Evaluation Metrics", "Agent Evaluation"],
+    "must_retrieve_terms": ["faithfulness", "context precision", "task success", "process metrics"]
   }
 ]

@@ -12,3 +12,29 @@ Usage example:
     # Or get a retriever directly for advanced use
     retriever = get_retriever(index, mode="hybrid")
 """
+
+from src.retrieval.query_engine import (
+    get_query_engine,
+    get_vector_store,
+    EDUCATIONAL_TEXT_QA_PROMPT,
+)
+
+from src.retrieval.retriever import (
+    get_retriever,
+    SmallToBigRetriever,
+    HybridRetriever,
+    VectorRetriever,  # exported for advanced / testing use
+)
+
+from src.retrieval.postprocessor import MetadataBoosterPostprocessor
+
+__all__ = [
+    "get_query_engine",
+    "get_vector_store",
+    "get_retriever",
+    "SmallToBigRetriever",
+    "HybridRetriever",
+    "VectorRetriever",
+    "MetadataBoosterPostprocessor",
+    "EDUCATIONAL_TEXT_QA_PROMPT",
+]

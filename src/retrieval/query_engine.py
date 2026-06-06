@@ -19,6 +19,7 @@ from llama_index.vector_stores.chroma import ChromaVectorStore
 from src.config import _find_project_root, get_settings
 from src.logging_config import logger
 from src.retrieval.retriever import get_retriever  # New modular retrievers
+from src.retrieval.postprocessor import MetadataBoosterPostprocessor  # Metadata bias correction
 
 
 # =============================================================================
@@ -109,6 +110,32 @@ def get_query_engine(
         embed_model=Settings.embed_model,
     )
 
+    # === Repopulate docstore from sidecar (High priority fix for real parent / hybrid nodes) ===
+    # Ingestion now writes data/processed/hierarchy_nodes.json with all hierarchical nodes.
+    # This lets SmallToBigRetriever see real parents and Hybrid get leaf texts even after
+    # from_vector_store() (which otherwise leaves an empty docstore).
+    try:
+        from src.config import _find_project_root
+        from pathlib import Path
+        import json
+        from llama_index.core.schema import TextNode
+
+        project_root = _find_project_root()
+        # Mirror the vector_store persist_dir used in get_vector_store
+        vs_cfg = getattr(settings, "vector_store", None) or settings.llama_index.vector_store
+        persist_dir = project_root / vs_cfg.persist_dir
+        hierarchy_path = persist_dir / "hierarchy_nodes.json"
+
+        if hierarchy_path.exists():
+            with open(hierarchy_path, "r", encoding="utf-8") as f:
+                node_dicts = json.load(f)
+            loaded_nodes = [TextNode.from_dict(d) for d in node_dicts if d]
+            if loaded_nodes:
+                index.docstore.add_documents(loaded_nodes)
+                logger.info(f"Repopulated docstore with {len(loaded_nodes)} hierarchy nodes from sidecar for Small-to-Big / Hybrid")
+    except Exception as e:
+        logger.warning(f"Could not load hierarchy sidecar (S2B/Hybrid will use fallbacks): {e}")
+
     # Get the appropriate retriever (vector / small_to_big / hybrid)
     # This is fully configurable via config.yaml
     retriever = get_retriever(
@@ -120,6 +147,37 @@ def get_query_engine(
         bm25_top_k=getattr(settings.retrieval, "bm25_top_k", top_k),
     )
 
+    # =====================================================================
+    # Metadata-based score boosting (bias correction)
+    # Applied as a NodePostprocessor *after* the custom retriever (SmallToBig,
+    # Hybrid, etc.) but *before* the response synthesizer / LLM.
+    # This is the recommended LlamaIndex pattern for post-retrieval adjustments.
+    # =====================================================================
+    node_postprocessors = []
+
+    retrieval_cfg = settings.retrieval
+
+    # Read from the metadata_boosting dict (supports nested yaml under retrieval:)
+    mb = getattr(retrieval_cfg, "metadata_boosting", {}) or {}
+    enabled = mb.get("enabled", False)
+    penalty = mb.get("memory_section_penalty", 0.6)
+    boost = mb.get("boost_important_sections", True)
+
+    if enabled:
+        postproc = MetadataBoosterPostprocessor(
+            memory_section_penalty=penalty,
+            boost_important_sections=boost,
+        )
+        node_postprocessors.append(postproc)
+        logger.info(
+            "MetadataBoosterPostprocessor enabled for section bias correction",
+            extra={
+                "memory_section_penalty": penalty,
+                "boost_important_sections": boost,
+                "retrieval_mode": getattr(retrieval_cfg, "mode", "unknown"),
+            },
+        )
+
     # Always use the strong educational prompt + configured response mode
     response_synthesizer = get_response_synthesizer(
         llm=Settings.llm,
@@ -130,6 +188,7 @@ def get_query_engine(
     query_engine = RetrieverQueryEngine(
         retriever=retriever,
         response_synthesizer=response_synthesizer,
+        node_postprocessors=node_postprocessors,
     )
 
     return query_engine
